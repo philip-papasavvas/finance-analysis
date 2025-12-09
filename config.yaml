@@ -1,0 +1,31 @@
+data:
+  base_path: "./data"
+  fidelity:
+    directory: "fidelity"
+    file_pattern: "TransactionHistory*.csv"
+    skip_rows: 6
+  interactive_investor:
+    directory: "interactive_investor"
+    file_pattern: "ii_isa_*.csv"
+    skip_rows: 0
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+# Transaction type mappings (platform-specific -> canonical)
+transaction_types:
+  buy:
+    - "Buy"
+    - "Buy For Switch"
+    - "Transfer In"
+  sell:
+    - "Sell"
+    - "Sell For Switch"
+  dividend:
+    - "Dividend"
+  transfer_out:
+    - "Transfer Out"
+  fee:
+    - "Fixed Quarterly Payment"
