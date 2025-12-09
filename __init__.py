@@ -20,7 +20,7 @@ Example usage:
 
     # Generate report
     report = TransactionReport(transactions)
-    df = report.generate_fund_report("Blue Whale", tax_wrapper=TaxWrapper.ISA)
+    df = report.generate_fund_report("Global Index Fund", tax_wrapper=TaxWrapper.ISA)
     print(df)
 """
 
