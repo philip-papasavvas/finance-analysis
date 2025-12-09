@@ -270,25 +270,11 @@ if __name__ == "__main__":
 
     # Example: Interactive Investor ISA cash flows
     cash_flows = [
-        CashFlow(date(2018, 9, 17), -3500.00, "Subscription"),
-        CashFlow(date(2018, 10, 16), -1939.51, "Transfer from BestInvest"),
-        CashFlow(date(2019, 3, 29), -3000.00, "Subscription"),
-        CashFlow(date(2019, 4, 3), -3500.00, "Subscription"),
-        CashFlow(date(2019, 4, 26), -500.00, "Subscription"),
-        CashFlow(date(2019, 5, 30), -200.00, "Subscription"),
-        CashFlow(date(2019, 6, 25), -21160.52, "Transfer from BestInvest"),
-        CashFlow(date(2019, 7, 19), -300.00, "Subscription"),
-        CashFlow(date(2019, 7, 24), -0.72, "Transfer from BestInvest"),
-        CashFlow(date(2019, 7, 30), -500.00, "Subscription"),
-        CashFlow(date(2020, 11, 17), 50000.00, "Withdrawal"),
-        CashFlow(date(2024, 4, 6), -5000.00, "Subscription"),
-        CashFlow(date(2024, 4, 15), 250.00, "Rejected"),
-        CashFlow(date(2024, 4, 15), -4000.00, "Subscription"),
-        CashFlow(date(2025, 9, 25), -15000.00, "Fundsmith transfer"),
-        CashFlow(date(2025, 10, 29), -11878.50, "Fundsmith transfer"),
+        CashFlow(date(2025, 9, 25), -1500.00, "Fundsmith transfer"),
+        CashFlow(date(2025, 10, 29), -1187.50, "Fundsmith transfer"),
     ]
 
-    current_value = 71936.55
+    current_value = 1500.55
 
     # Calculate returns
     calculator = ReturnCalculator(cash_flows, current_value)
