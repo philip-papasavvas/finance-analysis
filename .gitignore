@@ -1,3 +1,6 @@
+# don't write the raw data to the repository as this is private
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
