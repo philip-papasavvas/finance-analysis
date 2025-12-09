@@ -268,18 +268,19 @@ if __name__ == "__main__":
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     )
 
-    # Example: Interactive Investor ISA cash flows
+    # Example: ISA cash flows
     cash_flows = [
-        CashFlow(date(2025, 9, 25), -1500.00, "Fundsmith transfer"),
-        CashFlow(date(2025, 10, 29), -1187.50, "Fundsmith transfer"),
+        CashFlow(date(2022, 8, 1), 3000.00, "Withdrawal"),
+        CashFlow(date(2023, 4, 1), -5000.00, "Annual subscription"),
+        CashFlow(date(2024, 4, 1), -5000.00, "Annual subscription"),
     ]
 
-    current_value = 1500.55
+    current_value = 8000.00
 
     # Calculate returns
     calculator = ReturnCalculator(cash_flows, current_value)
-    metrics = calculator.calculate_all(end_date=date(2025, 12, 8))
+    metrics = calculator.calculate_all(end_date=date(2025, 4, 1))
 
-    print("\nInteractive Investor ISA Return Metrics:")
+    print("\nExample ISA Return Metrics:")
     print("=" * 50)
     print(metrics)
