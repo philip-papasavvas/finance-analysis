@@ -1,0 +1,7 @@
+# Core dependencies for portfolio analyzer
+pandas>=2.0.0
+scipy>=1.10.0
+pyyaml>=6.0
+
+# Optional: for generating markdown tables (used in reports.py)
+tabulate>=0.9.0
