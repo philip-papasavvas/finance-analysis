@@ -1,6 +1,17 @@
 # don't write the raw data to the repository as this is private
 data/
 
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
