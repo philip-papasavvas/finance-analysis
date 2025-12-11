@@ -20,13 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 def get_all_funds_from_db():
-    """Get all unique funds from the database."""
+    """Get all unique funds from the database with their mapped names (excluding excluded funds)."""
     db = TransactionDatabase("portfolio.db")
     cursor = db.conn.cursor()
     cursor.execute("""
-        SELECT DISTINCT fund_name FROM transactions ORDER BY fund_name
+        SELECT DISTINCT fund_name, COALESCE(mapped_fund_name, fund_name) as display_name
+        FROM transactions
+        WHERE excluded = 0
+        ORDER BY COALESCE(mapped_fund_name, fund_name)
     """)
-    funds = [row["fund_name"] for row in cursor.fetchall()]
+    funds = {}
+    for row in cursor.fetchall():
+        funds[row["fund_name"]] = row["display_name"]
     db.close()
     return funds
 
@@ -41,15 +46,61 @@ def get_fund_transactions(fund_name: str) -> pd.DataFrame:
             platform,
             tax_wrapper,
             fund_name,
+            mapped_fund_name,
             transaction_type,
             units,
             price_per_unit,
             value,
             currency
         FROM transactions
-        WHERE fund_name = ?
+        WHERE fund_name = ? AND excluded = 0
         ORDER BY date
     """, (fund_name,))
+
+    rows = cursor.fetchall()
+    db.close()
+
+    if not rows:
+        return pd.DataFrame()
+
+    data = []
+    for row in rows:
+        # Use mapped name if available, otherwise original name
+        display_name = row["mapped_fund_name"] if row["mapped_fund_name"] else row["fund_name"]
+
+        data.append({
+            "Date": row["date"],
+            "Platform": row["platform"],
+            "Tax Wrapper": row["tax_wrapper"],
+            "Fund Name": display_name,
+            "Type": row["transaction_type"],
+            "Units": row["units"],
+            "Price (£)": row["price_per_unit"],
+            "Value (£)": row["value"],
+            "Currency": row["currency"],
+        })
+
+    return pd.DataFrame(data)
+
+
+def get_all_transactions() -> pd.DataFrame:
+    """Get all transactions from the database."""
+    db = TransactionDatabase("portfolio.db")
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT
+            date,
+            platform,
+            tax_wrapper,
+            fund_name,
+            transaction_type,
+            units,
+            price_per_unit,
+            value,
+            currency
+        FROM transactions
+        ORDER BY date DESC
+    """)
 
     rows = cursor.fetchall()
     db.close()
@@ -69,6 +120,39 @@ def get_fund_transactions(fund_name: str) -> pd.DataFrame:
             "Price (£)": row["price_per_unit"],
             "Value (£)": row["value"],
             "Currency": row["currency"],
+        })
+
+    return pd.DataFrame(data)
+
+
+def get_fund_holdings() -> pd.DataFrame:
+    """Get current holdings for each fund (units held, excluding zero holdings)."""
+    db = TransactionDatabase("portfolio.db")
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT
+            fund_name,
+            SUM(CASE WHEN transaction_type = 'BUY' THEN units ELSE -units END) as units_held,
+            COUNT(*) as transaction_count
+        FROM transactions
+        WHERE excluded = 0
+        GROUP BY fund_name
+        HAVING units_held > 0
+        ORDER BY units_held DESC
+    """)
+
+    rows = cursor.fetchall()
+    db.close()
+
+    if not rows:
+        return pd.DataFrame()
+
+    data = []
+    for row in rows:
+        data.append({
+            "Fund Name": row["fund_name"],
+            "Units Held": row["units_held"],
+            "Transactions": row["transaction_count"],
         })
 
     return pd.DataFrame(data)
@@ -135,19 +219,12 @@ def create_cumulative_units_chart(df: pd.DataFrame, fund_name: str) -> go.Figure
         return None
 
     # Convert date to datetime
+    df = df.copy()
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date")
 
     # Calculate cumulative units (buys are positive, sells are negative)
-    df["Cumulative Units"] = 0
-    cumulative = 0
-
-    for idx, row in df.iterrows():
-        if row["Type"] == "BUY":
-            cumulative += row["Units"]
-        else:  # SELL
-            cumulative -= row["Units"]
-        df.at[idx, "Cumulative Units"] = cumulative
+    df["Cumulative Units"] = df["Units"].where(df["Type"] == "BUY", -df["Units"]).cumsum()
 
     fig = go.Figure()
 
@@ -177,100 +254,148 @@ def main():
     st.set_page_config(page_title="Portfolio Viewer", layout="wide")
 
     st.title("📈 Portfolio Fund Viewer")
-    st.markdown("Track your fund transactions with interactive charts and filtering")
+    st.markdown("Track your fund transactions and holdings")
 
-    # Sidebar
-    st.sidebar.header("Fund Selection")
+    # Create tabs
+    tab1, tab2 = st.tabs(["📊 Portfolio Overview", "🔍 Fund Breakdown"])
 
-    # Load all funds
-    all_funds = get_all_funds_from_db()
+    # ==================== TAB 1: PORTFOLIO OVERVIEW ====================
+    with tab1:
+        st.header("Portfolio Overview")
 
-    if not all_funds:
-        st.error("No transactions found in the database. Please load transactions first.")
-        return
+        # Get all funds and holdings
+        funds_dict = get_all_funds_from_db()
+        holdings_df = get_fund_holdings()
 
-    # Fund selector
-    selected_fund = st.sidebar.selectbox(
-        "Select a Fund",
-        options=all_funds,
-        format_func=lambda x: f"{x}",
-    )
-
-    if selected_fund:
-        # Get standardized name
-        standardized_name = get_standardized_name(selected_fund)
-
-        # Get transactions for this fund
-        df = get_fund_transactions(selected_fund)
-
-        if df.empty:
-            st.warning(f"No transactions found for {selected_fund}")
+        if not funds_dict:
+            st.error("No transactions found in the database. Please load transactions first.")
             return
 
-        # Header with fund info
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.header(f"Fund: {selected_fund}")
-            if standardized_name != selected_fund:
-                st.info(f"📋 Standardized name: **{standardized_name}**")
+        # ---- All Funds List ----
+        st.subheader("📋 All Funds")
 
-        # Summary statistics
-        st.subheader("Summary")
-        col1, col2, col3, col4 = st.columns(4)
+        # Get fund counts (excluding excluded funds) with mapped names
+        db = TransactionDatabase("portfolio.db")
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(mapped_fund_name, fund_name) as display_name, COUNT(*) as tx_count
+            FROM transactions
+            WHERE excluded = 0
+            GROUP BY COALESCE(mapped_fund_name, fund_name)
+            ORDER BY COALESCE(mapped_fund_name, fund_name)
+        """)
 
-        with col1:
-            total_transactions = len(df)
-            st.metric("Total Transactions", total_transactions)
+        funds_list_data = []
+        for row in cursor.fetchall():
+            funds_list_data.append({
+                "Fund Name": row["display_name"],
+                "Transactions": row["tx_count"],
+            })
+        db.close()
 
-        with col2:
-            buy_count = len(df[df["Type"] == "BUY"])
-            st.metric("Buy Orders", buy_count)
+        if funds_list_data:
+            funds_df = pd.DataFrame(funds_list_data)
+            st.dataframe(funds_df, width='stretch', hide_index=True)
+        else:
+            st.info("No funds found")
 
-        with col3:
-            sell_count = len(df[df["Type"] == "SELL"])
-            st.metric("Sell Orders", sell_count)
+    # ==================== TAB 2: FUND BREAKDOWN ====================
+    with tab2:
+        st.header("Fund Breakdown")
 
-        with col4:
-            buys_df = df[df["Type"] == "BUY"]
-            total_invested = buys_df["Value (£)"].sum() if not buys_df.empty else 0
-            st.metric("Total Invested (£)", f"£{total_invested:,.2f}")
+        # Fund selector at the top
+        funds_dict = get_all_funds_from_db()
 
-        # Charts
-        st.subheader("Charts")
+        if not funds_dict:
+            st.error("No funds available")
+            return
 
-        chart_col1, chart_col2 = st.columns(2)
+        # Create a selectbox with display names but return original fund names
+        fund_keys = list(funds_dict.keys())
+        fund_display_names = [funds_dict[k] for k in fund_keys]
 
-        with chart_col1:
-            timeline_fig = create_timeline_chart(df, selected_fund)
-            if timeline_fig:
-                st.plotly_chart(timeline_fig, use_container_width=True)
-
-        with chart_col2:
-            cumulative_fig = create_cumulative_units_chart(df, selected_fund)
-            if cumulative_fig:
-                st.plotly_chart(cumulative_fig, use_container_width=True)
-
-        # Transactions table
-        st.subheader("All Transactions")
-
-        # Format for display
-        df_display = df.copy()
-        df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
-        df_display["Units"] = df_display["Units"].apply(lambda x: f"{x:,.2f}")
-        df_display["Price (£)"] = df_display["Price (£)"].apply(lambda x: f"£{x:,.2f}")
-        df_display["Value (£)"] = df_display["Value (£)"].apply(lambda x: f"£{x:,.2f}")
-
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-        # Export option
-        st.subheader("Export")
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="Download Transactions as CSV",
-            data=csv,
-            file_name=f"{selected_fund}_transactions.csv",
-            mime="text/csv",
+        selected_index = st.selectbox(
+            "Select a Fund to Analyze",
+            options=range(len(fund_keys)),
+            format_func=lambda i: fund_display_names[i],
+            key="fund_selector",
         )
+        selected_fund = fund_keys[selected_index]
+
+        if selected_fund:
+            # Get standardized name
+            standardized_name = get_standardized_name(selected_fund)
+
+            # Get transactions for this fund
+            df = get_fund_transactions(selected_fund)
+
+            if df.empty:
+                st.warning(f"No transactions found for {selected_fund}")
+            else:
+                # Header with fund info
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.subheader(f"Fund: {selected_fund}")
+                    if standardized_name != selected_fund:
+                        st.info(f"📋 Standardized name: **{standardized_name}**")
+
+                # Summary statistics
+                st.subheader("Summary")
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    total_transactions = len(df)
+                    st.metric("Total Transactions", total_transactions)
+
+                with col2:
+                    buy_count = len(df[df["Type"] == "BUY"])
+                    st.metric("Buy Orders", buy_count)
+
+                with col3:
+                    sell_count = len(df[df["Type"] == "SELL"])
+                    st.metric("Sell Orders", sell_count)
+
+                with col4:
+                    buys_df = df[df["Type"] == "BUY"]
+                    total_invested = buys_df["Value (£)"].sum() if not buys_df.empty else 0
+                    st.metric("Total Invested (£)", f"£{total_invested:,.2f}")
+
+                # Charts
+                st.subheader("Charts")
+
+                chart_col1, chart_col2 = st.columns(2)
+
+                with chart_col1:
+                    timeline_fig = create_timeline_chart(df, selected_fund)
+                    if timeline_fig:
+                        st.plotly_chart(timeline_fig, width='stretch')
+
+                with chart_col2:
+                    cumulative_fig = create_cumulative_units_chart(df, selected_fund)
+                    if cumulative_fig:
+                        st.plotly_chart(cumulative_fig, width='stretch')
+
+                # Transactions table
+                st.subheader("All Transactions")
+
+                # Format for display
+                df_display = df.copy()
+                df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
+                df_display["Units"] = df_display["Units"].apply(lambda x: f"{x:,.2f}")
+                df_display["Price (£)"] = df_display["Price (£)"].apply(lambda x: f"£{x:,.2f}")
+                df_display["Value (£)"] = df_display["Value (£)"].apply(lambda x: f"£{x:,.2f}")
+
+                st.dataframe(df_display, width='stretch', hide_index=True)
+
+                # Export option
+                st.subheader("Export")
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Download Transactions as CSV",
+                    data=csv,
+                    file_name=f"{selected_fund}_transactions.csv",
+                    mime="text/csv",
+                )
 
 
 if __name__ == "__main__":
