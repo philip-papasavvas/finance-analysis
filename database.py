@@ -31,7 +31,7 @@ class TransactionDatabase:
         logger.info(f"Connected to database: {self.db_path}")
 
     def create_tables(self) -> None:
-        """Create the transactions table if it doesn't exist."""
+        """Create the transactions and fund_name_mapping tables if they don't exist."""
         cursor = self.conn.cursor()
 
         cursor.execute("""
@@ -54,6 +54,15 @@ class TransactionDatabase:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fund_name_mapping (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                original_name TEXT NOT NULL UNIQUE,
+                standardized_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create indexes for common queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_date ON transactions(date)
@@ -66,6 +75,9 @@ class TransactionDatabase:
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tax_wrapper ON transactions(tax_wrapper)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_original_name ON fund_name_mapping(original_name)
         """)
 
         self.conn.commit()
@@ -243,6 +255,79 @@ class TransactionDatabase:
             ORDER BY fund_name
         """)
         return [row["fund_name"] for row in cursor.fetchall()]
+
+    def add_fund_mapping(self, original_name: str, standardized_name: str) -> bool:
+        """
+        Add a fund name mapping to the database.
+
+        Args:
+            original_name: The original fund name.
+            standardized_name: The standardized fund name.
+
+        Returns:
+            True if inserted, False if mapping already exists.
+        """
+        cursor = self.conn.cursor()
+
+        try:
+            cursor.execute("""
+                INSERT INTO fund_name_mapping (original_name, standardized_name)
+                VALUES (?, ?)
+            """, (original_name, standardized_name))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            # Mapping already exists
+            return False
+
+    def get_standardized_name(self, original_name: str) -> str:
+        """
+        Get the standardized name for a fund.
+
+        Args:
+            original_name: The original fund name.
+
+        Returns:
+            The standardized name if mapping exists, otherwise the original name.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT standardized_name FROM fund_name_mapping
+            WHERE original_name = ?
+        """, (original_name,))
+        result = cursor.fetchone()
+
+        if result:
+            return result["standardized_name"]
+        return original_name
+
+    def get_all_fund_mappings(self) -> dict[str, str]:
+        """
+        Get all fund name mappings.
+
+        Returns:
+            Dictionary mapping original names to standardized names.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT original_name, standardized_name FROM fund_name_mapping
+            ORDER BY original_name
+        """)
+        return {row["original_name"]: row["standardized_name"] for row in cursor.fetchall()}
+
+    def clear_fund_mappings(self) -> int:
+        """
+        Delete all fund name mappings from the database.
+
+        Returns:
+            Number of deleted mappings.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM fund_name_mapping")
+        deleted = cursor.rowcount
+        self.conn.commit()
+        logger.warning(f"Deleted {deleted} fund name mappings from database")
+        return deleted
 
     def clear_all_transactions(self) -> int:
         """
