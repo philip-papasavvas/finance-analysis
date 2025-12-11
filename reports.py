@@ -11,6 +11,7 @@ from typing import Optional
 
 import pandas as pd
 
+from database import TransactionDatabase
 from models import Platform, TaxWrapper, Transaction, TransactionType
 
 
@@ -54,15 +55,43 @@ class TransactionFilter:
 class TransactionReport:
     """Generate transaction reports and tables."""
 
-    def __init__(self, transactions: list[Transaction]):
+    def __init__(self, transactions: list[Transaction], db_path: str = "portfolio.db"):
         """
         Initialise with a list of transactions.
 
         Args:
             transactions: List of Transaction objects.
+            db_path: Path to the SQLite database for fund name mappings.
         """
         self.transactions = transactions
+        self.db_path = db_path
+        self.fund_mappings: dict[str, str] = {}
+        self._load_fund_mappings()
         logger.info(f"TransactionReport initialised with {len(transactions)} transactions")
+
+    def _load_fund_mappings(self) -> None:
+        """Load fund name mappings from the database."""
+        try:
+            db = TransactionDatabase(self.db_path)
+            self.fund_mappings = db.get_all_fund_mappings()
+            db.close()
+            if self.fund_mappings:
+                logger.info(f"Loaded {len(self.fund_mappings)} fund name mappings")
+        except Exception as e:
+            logger.warning(f"Could not load fund mappings: {e}")
+            self.fund_mappings = {}
+
+    def get_standardized_name(self, original_name: str) -> str:
+        """
+        Get the standardized name for a fund.
+
+        Args:
+            original_name: The original fund name.
+
+        Returns:
+            The standardized name if mapping exists, otherwise the original name.
+        """
+        return self.fund_mappings.get(original_name, original_name)
 
     def filter(self, criteria: TransactionFilter) -> list[Transaction]:
         """
@@ -204,6 +233,46 @@ class TransactionReport:
             return "No transactions found."
 
         return df.to_markdown(index=False)
+
+    def to_dataframe_with_standardized(
+        self,
+        transactions: Optional[list[Transaction]] = None,
+    ) -> pd.DataFrame:
+        """
+        Convert transactions to a DataFrame with standardized fund names.
+
+        Args:
+            transactions: List of transactions to convert.
+                         Uses all transactions if not specified.
+
+        Returns:
+            DataFrame with transaction data, showing standardized fund names.
+        """
+        df = self.to_dataframe(transactions)
+
+        if df.empty or "Fund Name" not in df.columns:
+            return df
+
+        # Create a column with standardized names
+        df["Standardized Fund Name"] = df["Fund Name"].apply(
+            self.get_standardized_name
+        )
+
+        # Reorder columns to show standardized name next to original
+        column_order = [
+            "Tax Wrapper",
+            "Platform",
+            "Date",
+            "Fund Name",
+            "Standardized Fund Name",
+            "Buy/Sell",
+            "Units",
+            "Price (£)",
+            "Value (£)",
+        ]
+
+        columns = [c for c in column_order if c in df.columns]
+        return df[columns]
 
     def to_csv(
         self,
