@@ -49,6 +49,8 @@ class TransactionDatabase:
                 sedol TEXT,
                 reference TEXT,
                 raw_description TEXT,
+                excluded INTEGER DEFAULT 0,
+                mapped_fund_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(platform, date, fund_name, transaction_type, value, reference)
             )
@@ -328,6 +330,35 @@ class TransactionDatabase:
         self.conn.commit()
         logger.warning(f"Deleted {deleted} fund name mappings from database")
         return deleted
+
+    def exclude_fund(self, fund_name: str) -> None:
+        """
+        Mark all transactions for a fund as excluded.
+
+        Args:
+            fund_name: The fund name to exclude.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE transactions SET excluded = 1 WHERE fund_name = ?
+        """, (fund_name,))
+        self.conn.commit()
+        logger.info(f"Excluded fund: {fund_name}")
+
+    def set_mapped_fund_name(self, fund_name: str, mapped_name: str) -> None:
+        """
+        Set the mapped fund name for transactions.
+
+        Args:
+            fund_name: The original fund name.
+            mapped_name: The mapped fund name.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE transactions SET mapped_fund_name = ? WHERE fund_name = ? AND mapped_fund_name IS NULL
+        """, (mapped_name, fund_name))
+        self.conn.commit()
+        logger.info(f"Set mapped name: {fund_name} → {mapped_name}")
 
     def clear_all_transactions(self) -> int:
         """
