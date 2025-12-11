@@ -2,11 +2,16 @@
 Streamlit app for viewing portfolio transactions with interactive fund selection.
 """
 import logging
+import sys
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+# Add parent directory to path so we can import src
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.database import TransactionDatabase
 
