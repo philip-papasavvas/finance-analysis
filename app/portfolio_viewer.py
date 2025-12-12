@@ -280,13 +280,37 @@ def get_price_history(ticker: str) -> pd.DataFrame:
     return df[['Date', 'Price', 'ticker', 'fund_name']].sort_values('Date')
 
 
-def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str) -> go.Figure:
-    """Create a line chart for price history."""
+def get_transactions_for_ticker(ticker: str) -> pd.DataFrame:
+    """Get buy/sell transactions for a specific ticker using fund_ticker_mapping."""
+    db = TransactionDatabase("portfolio.db")
+    transactions = db.get_transactions_for_ticker(ticker)
+    db.close()
+
+    if not transactions:
+        return pd.DataFrame()
+
+    data = []
+    for row in transactions:
+        data.append({
+            "Date": pd.to_datetime(row["date"]),
+            "Type": row["transaction_type"],
+            "Units": row["units"],
+            "Price": row["price_per_unit"],
+            "Value": row["value"],
+            "Marker_Y": row["marker_y"],  # Y-position on chart (close price from that date)
+        })
+
+    return pd.DataFrame(data)
+
+
+def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str, transactions_df: pd.DataFrame = None) -> go.Figure:
+    """Create a line chart for price history with optional buy/sell transaction markers."""
     if df.empty:
         return None
 
     fig = go.Figure()
 
+    # Price line
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Price"],
@@ -296,13 +320,72 @@ def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str) -> go.Figu
         hovertemplate="<b>Price</b><br>Date: %{x|%Y-%m-%d}<br>Price: £%{y:.2f}<extra></extra>",
     ))
 
+    # Add buy/sell markers if transactions data provided
+    if transactions_df is not None and not transactions_df.empty:
+        # Buy markers (dark green circles)
+        buy_df = transactions_df[transactions_df["Type"] == "BUY"]
+        if not buy_df.empty:
+            fig.add_trace(go.Scatter(
+                x=buy_df["Date"],
+                y=buy_df["Marker_Y"],
+                mode="markers",
+                name="BUY",
+                marker=dict(
+                    color="darkgreen",
+                    size=10,
+                    symbol="circle",
+                    line=dict(color="white", width=1)
+                ),
+                hovertemplate=(
+                    "<b>BUY</b><br>"
+                    "Date: %{x|%Y-%m-%d}<br>"
+                    "Units: %{customdata[0]:.2f}<br>"
+                    "Price: £%{customdata[1]:.2f}<br>"
+                    "Value: £%{customdata[2]:,.2f}"
+                    "<extra></extra>"
+                ),
+                customdata=buy_df[["Units", "Price", "Value"]].values
+            ))
+
+        # Sell markers (dark red circles)
+        sell_df = transactions_df[transactions_df["Type"] == "SELL"]
+        if not sell_df.empty:
+            fig.add_trace(go.Scatter(
+                x=sell_df["Date"],
+                y=sell_df["Marker_Y"],
+                mode="markers",
+                name="SELL",
+                marker=dict(
+                    color="darkred",
+                    size=10,
+                    symbol="circle",
+                    line=dict(color="white", width=1)
+                ),
+                hovertemplate=(
+                    "<b>SELL</b><br>"
+                    "Date: %{x|%Y-%m-%d}<br>"
+                    "Units: %{customdata[0]:.2f}<br>"
+                    "Price: £%{customdata[1]:.2f}<br>"
+                    "Value: £%{customdata[2]:,.2f}"
+                    "<extra></extra>"
+                ),
+                customdata=sell_df[["Units", "Price", "Value"]].values
+            ))
+
     fig.update_layout(
         title=f"Price History - {fund_name} ({ticker})",
         xaxis_title="Date",
         yaxis_title="Price (£)",
-        hovermode="x unified",
-        height=400,
+        hovermode="closest",
+        height=500,
         template="plotly_white",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
     )
 
     return fig
@@ -482,6 +565,7 @@ def main():
         if selected_ticker:
             # Get price history data
             price_df = get_price_history(selected_ticker)
+            transactions_df = get_transactions_for_ticker(selected_ticker)
             fund_name = ticker_info_dict.get(selected_ticker, selected_ticker)
 
             if price_df.empty:
@@ -520,9 +604,30 @@ def main():
 
                 # Price chart
                 st.subheader("Price Chart")
-                fig = create_price_chart(price_df, selected_ticker, fund_name)
+
+                # Add toggle for showing transactions
+                show_transactions = st.checkbox(
+                    "Show buy/sell transactions",
+                    value=True,
+                    key="show_transactions_toggle"
+                )
+
+                # Pass transactions if toggle is on
+                transactions_to_show = transactions_df if show_transactions else None
+                fig = create_price_chart(price_df, selected_ticker, fund_name, transactions_to_show)
                 if fig:
                     st.plotly_chart(fig, width='stretch')
+
+                # Show transaction summary if data exists
+                if not transactions_df.empty:
+                    buy_count = len(transactions_df[transactions_df['Type'] == 'BUY'])
+                    sell_count = len(transactions_df[transactions_df['Type'] == 'SELL'])
+                    st.info(
+                        f"Found {len(transactions_df)} buy/sell transactions for this ticker "
+                        f"({buy_count} buys, {sell_count} sells)"
+                    )
+                else:
+                    st.info("No buy/sell transactions found for this ticker")
 
                 # Price data table
                 st.subheader("Price History Data")
