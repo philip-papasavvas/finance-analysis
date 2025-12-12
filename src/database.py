@@ -65,6 +65,18 @@ class TransactionDatabase:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                fund_name TEXT NOT NULL,
+                close_price REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(date, ticker)
+            )
+        """)
+
         # Create indexes for common queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_date ON transactions(date)
@@ -80,6 +92,41 @@ class TransactionDatabase:
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_original_name ON fund_name_mapping(original_name)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_price_date ON price_history(date)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_price_ticker ON price_history(ticker)
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fund_ticker_mapping (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fund_name TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                sedol TEXT,
+                isin TEXT,
+                mapped_fund_name TEXT,
+                is_auto_mapped INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(fund_name, ticker)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fund_ticker_fund_name
+            ON fund_ticker_mapping(fund_name)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fund_ticker_ticker
+            ON fund_ticker_mapping(ticker)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fund_ticker_sedol
+            ON fund_ticker_mapping(sedol)
         """)
 
         self.conn.commit()
@@ -373,6 +420,212 @@ class TransactionDatabase:
         self.conn.commit()
         logger.warning(f"Deleted {deleted} transactions from database")
         return deleted
+
+    def insert_price_history(self, date: str, ticker: str, fund_name: str, close_price: float) -> bool:
+        """
+        Insert a single price history record into the database.
+
+        Args:
+            date: Date in YYYY-MM-DD format.
+            ticker: Ticker symbol.
+            fund_name: Fund or instrument name.
+            close_price: Closing price for the day.
+
+        Returns:
+            True if inserted, False if duplicate.
+        """
+        cursor = self.conn.cursor()
+
+        try:
+            cursor.execute("""
+                INSERT INTO price_history (date, ticker, fund_name, close_price)
+                VALUES (?, ?, ?, ?)
+            """, (date, ticker, fund_name, close_price))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            # Duplicate record
+            return False
+
+    def insert_price_histories(self, records: list[dict]) -> tuple[int, int]:
+        """
+        Insert multiple price history records into the database.
+
+        Args:
+            records: List of dictionaries with 'date', 'ticker', 'fund_name', 'close_price'.
+
+        Returns:
+            Tuple of (inserted_count, duplicate_count).
+        """
+        inserted = 0
+        duplicates = 0
+
+        for record in records:
+            if self.insert_price_history(
+                record['date'],
+                record['ticker'],
+                record['fund_name'],
+                record['close_price']
+            ):
+                inserted += 1
+            else:
+                duplicates += 1
+
+        logger.info(f"Inserted {inserted} price records, skipped {duplicates} duplicates")
+        return inserted, duplicates
+
+    def get_price_history_by_ticker(self, ticker: str) -> list[dict]:
+        """
+        Get all price history records for a specific ticker.
+
+        Args:
+            ticker: Ticker symbol.
+
+        Returns:
+            List of price history records sorted by date.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT date, ticker, fund_name, close_price
+            FROM price_history
+            WHERE ticker = ?
+            ORDER BY date
+        """, (ticker,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_price_tickers(self) -> list[str]:
+        """
+        Get all unique tickers in the price history database.
+
+        Returns:
+            Sorted list of unique ticker symbols.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT ticker FROM price_history ORDER BY ticker
+        """)
+        return [row['ticker'] for row in cursor.fetchall()]
+
+    def get_ticker_info(self) -> list[dict]:
+        """
+        Get information about all tickers in price history (ticker, fund_name, first_date, last_date, record_count).
+
+        Returns:
+            List of dictionaries with ticker information.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT
+                ticker,
+                fund_name,
+                MIN(date) as first_date,
+                MAX(date) as last_date,
+                COUNT(*) as record_count
+            FROM price_history
+            GROUP BY ticker
+            ORDER BY ticker
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def add_fund_ticker_mapping(
+        self,
+        fund_name: str,
+        ticker: str,
+        sedol: Optional[str] = None,
+        isin: Optional[str] = None,
+        is_auto_mapped: bool = False,
+    ) -> bool:
+        """
+        Add a fund-to-ticker mapping.
+
+        Args:
+            fund_name: The fund name from transactions.
+            ticker: The ticker symbol in price_history.
+            sedol: Optional SEDOL code.
+            isin: Optional ISIN code.
+            is_auto_mapped: Whether this was auto-extracted or manually mapped.
+
+        Returns:
+            True if inserted, False if duplicate.
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO fund_ticker_mapping
+                (fund_name, ticker, sedol, isin, is_auto_mapped)
+                VALUES (?, ?, ?, ?, ?)
+            """, (fund_name, ticker, sedol, isin, 1 if is_auto_mapped else 0))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def get_ticker_for_fund(self, fund_name: str) -> Optional[str]:
+        """
+        Get the ticker symbol for a fund name.
+
+        Args:
+            fund_name: The fund name to look up.
+
+        Returns:
+            Ticker symbol if found, None otherwise.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT ticker FROM fund_ticker_mapping
+            WHERE fund_name = ?
+            LIMIT 1
+        """, (fund_name,))
+        result = cursor.fetchone()
+        return result["ticker"] if result else None
+
+    def get_transactions_for_ticker(self, ticker: str) -> list[dict]:
+        """
+        Get buy/sell transactions for a specific ticker.
+
+        Joins transactions → fund_ticker_mapping → price_history to get
+        transaction details with the price from the transaction date.
+
+        Args:
+            ticker: The ticker symbol.
+
+        Returns:
+            List of transaction records with date, type, units, prices, and marker_y.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT
+                t.date,
+                t.transaction_type,
+                t.units,
+                t.price_per_unit,
+                t.value,
+                t.fund_name,
+                ph.close_price as marker_y
+            FROM transactions t
+            INNER JOIN fund_ticker_mapping ftm ON t.fund_name = ftm.fund_name
+            INNER JOIN price_history ph ON ftm.ticker = ph.ticker AND t.date = ph.date
+            WHERE ftm.ticker = ?
+              AND t.excluded = 0
+              AND t.transaction_type IN ('BUY', 'SELL')
+            ORDER BY t.date
+        """, (ticker,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_fund_ticker_mappings(self) -> list[dict]:
+        """
+        Get all fund-to-ticker mappings.
+
+        Returns:
+            List of mapping records.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT fund_name, ticker, sedol, isin, is_auto_mapped, created_at
+            FROM fund_ticker_mapping
+            ORDER BY ticker, fund_name
+        """)
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:
         """Close the database connection."""
