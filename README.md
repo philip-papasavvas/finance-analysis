@@ -1,21 +1,26 @@
-# Portfolio Analyzer
+# Portfolio Fund Viewer
 
-A Python package for analysing investment portfolio transactions from UK trading platforms (Fidelity and Interactive Investor).
+A Python web application for analysing investment portfolio transactions from UK trading platforms (Fidelity and Interactive Investor). Built with Streamlit and SQLite for interactive fund tracking and visualization.
 
 ## Overview
 
-Portfolio Analyzer loads transaction history CSV files from multiple platforms, normalises them into a common format, and provides tools for:
+Portfolio Fund Viewer loads transaction history CSV files from multiple platforms, normalises them into a common format, and provides an interactive web dashboard for:
 
-- Generating transaction reports filtered by fund, platform, or tax wrapper
-- Calculating return metrics (simple return, annualised return, MWRR/IRR)
-- Tracking positions across ISA and SIPP accounts
+- Viewing all funds with transaction counts
+- Analyzing individual fund performance with buy/sell charts and cumulative holdings
+- Mapping fund names to standardized display names
+- Excluding funds from the portfolio view
+- Exporting transaction data to CSV
 
 ## Features
 
+- **Interactive Streamlit Dashboard**: Two-tab interface with Portfolio Overview and Fund Breakdown
 - **Multi-platform support**: Fidelity and Interactive Investor CSV formats
 - **Tax wrapper awareness**: ISA, SIPP, and GIA support
-- **Flexible reporting**: Filter by fund name, platform, date range, or transaction type
-- **Return calculations**: Simple return, annualised return, and Money-Weighted Rate of Return (MWRR/IRR)
+- **Fund name mapping**: Map original fund names to standardized display names via JSON configuration
+- **Fund exclusion**: Mark specific funds as excluded from portfolio view
+- **SQLite database**: Persistent storage with transaction history and mappings
+- **Interactive charts**: Plotly-based buy/sell timeline and cumulative units charts
 - **Type hints**: Full type annotation throughout
 - **Logging**: Configurable logging for debugging and monitoring
 
@@ -27,149 +32,118 @@ Portfolio Analyzer loads transaction history CSV files from multiple platforms, 
 pandas>=2.0.0
 scipy>=1.10.0
 pyyaml>=6.0
+streamlit>=1.28.0
+plotly>=5.17.0
 ```
 
 ### Setup
 
 ```bash
-# Clone or copy the package
-cp -r portfolio_analyzer /path/to/your/project/
+# Clone the repository
+git clone <repository-url>
+cd finance-analysis
+
+# Create virtual environment (optional)
+python -m venv venv
+source venv/bin/activate
 
 # Install dependencies
-pip install pandas scipy pyyaml
+pip install pandas scipy pyyaml streamlit plotly
 ```
 
 ## Project Structure
 
 ```
-portfolio_analyzer/
-├── __init__.py          # Package exports
-├── config.py            # YAML configuration loader
-├── config.yaml          # Default configuration
-├── models.py            # Data models (Transaction, Holding, CashFlow)
-├── loaders.py           # Platform-specific CSV parsers
-├── reports.py           # Report generation
-├── calculators.py       # Return calculations
-└── utils.py             # Helper functions
+finance-analysis/
+├── src/
+│   ├── database.py              # SQLite database manager
+│   ├── loaders.py               # Platform-specific CSV parsers
+│   ├── standardize_fund_names.py # Fund name standardization
+│   ├── exclude_funds.py          # Fund exclusion utilities
+│   ├── migrate_db.py             # Database migration script
+│   └── apply_fund_mapping.py     # Apply JSON fund name mappings
+├── app/
+│   └── portfolio_viewer.py       # Streamlit web dashboard
+├── mappings/
+│   └── fund_rename_mapping.json  # Fund name mappings configuration
+├── data/
+│   ├── fidelity/                 # Fidelity CSV files
+│   └── interactive_investor/     # Interactive Investor CSV files
+├── portfolio.db                  # SQLite database file
+└── README.md
 ```
 
 ## Quick Start
 
-### Loading Transactions
+### 1. Load Transaction Data
+
+Place your CSV files in the data directories:
+- `data/fidelity/` - Fidelity transaction history CSVs
+- `data/interactive_investor/` - Interactive Investor CSVs
+
+Then load them into the database:
+
+```bash
+python src/loaders.py
+```
+
+This will create or update the `portfolio.db` SQLite database with all transactions.
+
+### 2. Set Up Fund Name Mappings (Optional)
+
+Create a JSON file at `mappings/fund_rename_mapping.json` with fund name mappings:
+
+```json
+{
+  "Original Fund Name": "Display Name",
+  "WS Blue Whale Growth Fund R Acc": "Blue Whale Growth",
+  "Vanguard FTSE All-Share Index Fund": "Vanguard UK Equity"
+}
+```
+
+Apply the mappings:
+
+```bash
+python src/apply_fund_mapping.py
+```
+
+### 3. Exclude Funds (Optional)
+
+Mark specific funds as excluded from the portfolio view:
+
+```bash
+python src/exclude_funds.py
+```
+
+Or add exclusions in your code:
 
 ```python
-from pathlib import Path
-from portfolio_analyzer import FidelityLoader, InteractiveInvestorLoader
+from src.database import TransactionDatabase
 
-# Load Fidelity transactions
-fidelity_loader = FidelityLoader(Path("./data/fidelity"))
-fidelity_transactions = fidelity_loader.load()
-
-# Load Interactive Investor transactions
-ii_loader = InteractiveInvestorLoader(Path("./data/interactive_investor"))
-ii_transactions = ii_loader.load()
-
-# Combine all transactions
-all_transactions = fidelity_transactions + ii_transactions
+db = TransactionDatabase("portfolio.db")
+db.exclude_fund("Old Fund Name")
+db.close()
 ```
 
-### Generating Reports
+### 4. Run the Dashboard
 
-```python
-from portfolio_analyzer import TransactionReport, Platform, TaxWrapper
+Start the Streamlit web application:
 
-# Create report generator
-report = TransactionReport(all_transactions)
-
-# Get all transactions for a specific fund in an ISA
-df = report.generate_fund_report(
-    fund_name="Global Index Fund",
-    platform=Platform.FIDELITY,
-    tax_wrapper=TaxWrapper.ISA,
-)
-
-print(df)
+```bash
+streamlit run app/portfolio_viewer.py
 ```
 
-Output:
+The app will open at `http://localhost:8501` with two tabs:
 
-```
-| Tax Wrapper | Platform | Date       | Fund Name         | Buy/Sell | Units    | Price (£) | Value (£) |
-|-------------|----------|------------|-------------------|----------|----------|-----------|-----------|
-| ISA         | Fidelity | 16/01/2023 | Global Index Fund | Buy      | 1,000.00 | 1.2000    | 1,200.00  |
-| ISA         | Fidelity | 28/02/2023 | Global Index Fund | Buy      |   500.00 | 2.0000    | 1,000.00  |
-| ...         | ...      | ...        | ...               | ...      | ...      | ...       | ...       |
-```
+- **Portfolio Overview**: View all funds with transaction counts
+- **Fund Breakdown**: Select individual funds to analyze with charts and transaction details
 
-### Calculating Returns
+### Running the Database Migration
 
-```python
-from datetime import date
-from portfolio_analyzer import ReturnCalculator, CashFlow
+If you need to update an existing database with new columns:
 
-# Define cash flows (negative = money in, positive = money out)
-cash_flows = [
-    CashFlow(date(2021, 9, 1), -10000.00, "Initial investment"),
-    CashFlow(date(2022, 4, 1), -5000.00, "Top up"),
-    CashFlow(date(2023, 6, 1), 2000.00, "Withdrawal"),
-]
-
-current_value = 15500.00
-
-# Calculate returns
-calculator = ReturnCalculator(cash_flows, current_value)
-metrics = calculator.calculate_all()
-
-print(metrics)
-```
-
-Output:
-
-```
-Return Metrics (2021-09-01 to 2025-12-09)
-  Total Contributions: £15,000.00
-  Total Withdrawals:   £2,000.00
-  Current Value:       £15,500.00
-  Total Gain:          £2,500.00
-  Simple Return:       +16.67%
-  Annualised Return:   +3.71%
-  MWRR (IRR):          +4.12%
-  Years Invested:      4.27
-```
-
-### Filtering Transactions
-
-```python
-from portfolio_analyzer import TransactionFilter, TransactionReport
-
-report = TransactionReport(transactions)
-
-# Create a filter
-criteria = TransactionFilter(
-    fund_name="UK Equity Fund",
-    tax_wrapper=TaxWrapper.ISA,
-    start_date=date(2021, 1, 1),
-    end_date=date(2023, 12, 31),
-)
-
-# Apply filter
-filtered = report.filter(criteria)
-
-# Get summary statistics
-summary = report.generate_summary(filtered)
-print(f"Total bought: £{summary['total_bought']:,.2f}")
-print(f"Total sold: £{summary['total_sold']:,.2f}")
-print(f"Units remaining: {summary['units_remaining']:,.2f}")
-```
-
-### Listing All Funds
-
-```python
-from portfolio_analyzer import get_unique_funds
-
-funds = get_unique_funds(transactions)
-for fund in funds:
-    print(f"  - {fund}")
+```bash
+python src/migrate_db.py
 ```
 
 ## Configuration
