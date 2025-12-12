@@ -2,8 +2,12 @@
 Script to exclude specific funds from the portfolio.
 """
 import logging
+from pathlib import Path
 
 from src.database import TransactionDatabase
+
+# Get the database path from the root directory
+DB_PATH = Path(__file__).parent.parent / "portfolio.db"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,7 +33,7 @@ FUNDS_TO_EXCLUDE = [
 
 def exclude_funds():
     """Exclude specified funds from the portfolio."""
-    db = TransactionDatabase("portfolio.db")
+    db = TransactionDatabase(str(DB_PATH))
 
     logger.info("=" * 80)
     logger.info("EXCLUDING FUNDS FROM PORTFOLIO")

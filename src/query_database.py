@@ -3,8 +3,12 @@ Query examples for the transaction database.
 """
 import logging
 from datetime import date
+from pathlib import Path
 
 from src.database import TransactionDatabase
+
+# Get the database path from the root directory
+DB_PATH = Path(__file__).parent.parent / "portfolio.db"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +18,7 @@ logging.basicConfig(
 
 def main():
     """Run example queries on the database."""
-    with TransactionDatabase("portfolio.db") as db:
+    with TransactionDatabase(str(DB_PATH)) as db:
         print("=" * 80)
         print("PORTFOLIO DATABASE QUERIES")
         print("=" * 80)

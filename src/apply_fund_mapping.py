@@ -7,6 +7,9 @@ from pathlib import Path
 
 from src.database import TransactionDatabase
 
+# Get the database path from the root directory
+DB_PATH = Path(__file__).parent.parent / "portfolio.db"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)-8s | %(message)s",
@@ -31,7 +34,7 @@ def apply_fund_mappings():
     logger.info("APPLYING FUND NAME MAPPINGS FROM JSON")
     logger.info("=" * 80)
 
-    db = TransactionDatabase("portfolio.db")
+    db = TransactionDatabase(str(DB_PATH))
 
     updated_count = 0
     skipped_count = 0
