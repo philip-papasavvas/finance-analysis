@@ -249,6 +249,65 @@ def create_cumulative_units_chart(df: pd.DataFrame, fund_name: str) -> go.Figure
     return fig
 
 
+def get_all_price_tickers():
+    """Get all available price tickers from the database."""
+    db = TransactionDatabase("portfolio.db")
+    tickers = db.get_all_price_tickers()
+    db.close()
+    return tickers
+
+
+def get_ticker_info_dict():
+    """Get information about all tickers as a dictionary (ticker -> fund_name)."""
+    db = TransactionDatabase("portfolio.db")
+    ticker_info = db.get_ticker_info()
+    db.close()
+    return {info['ticker']: info['fund_name'] for info in ticker_info}
+
+
+def get_price_history(ticker: str) -> pd.DataFrame:
+    """Get price history for a specific ticker."""
+    db = TransactionDatabase("portfolio.db")
+    prices = db.get_price_history_by_ticker(ticker)
+    db.close()
+
+    if not prices:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(prices)
+    df['Date'] = pd.to_datetime(df['date'])
+    df = df.rename(columns={'close_price': 'Price'})
+    return df[['Date', 'Price', 'ticker', 'fund_name']].sort_values('Date')
+
+
+def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str) -> go.Figure:
+    """Create a line chart for price history."""
+    if df.empty:
+        return None
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Price"],
+        fill="tozeroy",
+        name="Price",
+        line=dict(color="green", width=2),
+        hovertemplate="<b>Price</b><br>Date: %{x|%Y-%m-%d}<br>Price: £%{y:.2f}<extra></extra>",
+    ))
+
+    fig.update_layout(
+        title=f"Price History - {fund_name} ({ticker})",
+        xaxis_title="Date",
+        yaxis_title="Price (£)",
+        hovermode="x unified",
+        height=400,
+        template="plotly_white",
+    )
+
+    return fig
+
+
 def main():
     """Main Streamlit app."""
     st.set_page_config(page_title="Portfolio Viewer", layout="wide")
@@ -257,7 +316,7 @@ def main():
     st.markdown("Track your fund transactions and holdings")
 
     # Create tabs
-    tab1, tab2 = st.tabs(["📊 Portfolio Overview", "🔍 Fund Breakdown"])
+    tab1, tab2, tab3 = st.tabs(["📊 Portfolio Overview", "🔍 Fund Breakdown", "📈 Price History"])
 
     # ==================== TAB 1: PORTFOLIO OVERVIEW ====================
     with tab1:
@@ -396,6 +455,83 @@ def main():
                     file_name=f"{selected_fund}_transactions.csv",
                     mime="text/csv",
                 )
+
+    # ==================== TAB 3: PRICE HISTORY ====================
+    with tab3:
+        st.header("Price History")
+
+        # Get all available tickers
+        tickers = get_all_price_tickers()
+        ticker_info_dict = get_ticker_info_dict()
+
+        if not tickers:
+            st.info("No price history data available. Please load the price history data first.")
+            return
+
+        # Create a mapping for display
+        ticker_to_display = {ticker: f"{ticker} - {ticker_info_dict.get(ticker, 'Unknown')}" for ticker in tickers}
+
+        # Fund/Instrument selector
+        selected_ticker = st.selectbox(
+            "Select a Fund or Instrument to Analyze",
+            options=tickers,
+            format_func=lambda t: ticker_to_display[t],
+            key="ticker_selector",
+        )
+
+        if selected_ticker:
+            # Get price history data
+            price_df = get_price_history(selected_ticker)
+            fund_name = ticker_info_dict.get(selected_ticker, selected_ticker)
+
+            if price_df.empty:
+                st.warning(f"No price history found for {selected_ticker}")
+            else:
+                # Header with ticker info
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.subheader(f"Ticker: {selected_ticker}")
+                with col2:
+                    st.subheader(f"Fund: {fund_name}")
+                with col3:
+                    latest_price = price_df['Price'].iloc[-1] if not price_df.empty else 0
+                    st.metric("Latest Price", f"£{latest_price:.2f}")
+
+                # Summary statistics
+                st.subheader("Statistics")
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    min_price = price_df['Price'].min()
+                    st.metric("Min Price", f"£{min_price:.2f}")
+
+                with col2:
+                    max_price = price_df['Price'].max()
+                    st.metric("Max Price", f"£{max_price:.2f}")
+
+                with col3:
+                    avg_price = price_df['Price'].mean()
+                    st.metric("Average Price", f"£{avg_price:.2f}")
+
+                with col4:
+                    price_change = price_df['Price'].iloc[-1] - price_df['Price'].iloc[0]
+                    pct_change = (price_change / price_df['Price'].iloc[0]) * 100 if price_df['Price'].iloc[0] != 0 else 0
+                    st.metric("Total Change", f"£{price_change:.2f} ({pct_change:+.1f}%)")
+
+                # Price chart
+                st.subheader("Price Chart")
+                fig = create_price_chart(price_df, selected_ticker, fund_name)
+                if fig:
+                    st.plotly_chart(fig, width='stretch')
+
+                # Price data table
+                st.subheader("Price History Data")
+                df_display = price_df.copy()
+                df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
+                df_display["Price"] = df_display["Price"].apply(lambda x: f"£{x:.2f}")
+                df_display = df_display[["Date", "Price"]].rename(columns={"Date": "Date", "Price": "Close Price"})
+
+                st.dataframe(df_display, width='stretch', hide_index=True)
 
 
 if __name__ == "__main__":
