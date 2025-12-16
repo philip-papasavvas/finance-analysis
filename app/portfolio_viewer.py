@@ -308,6 +308,13 @@ def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str, transactio
     if df.empty:
         return None
 
+    # Determine currency symbol based on ticker
+    dollar_tickers = ["BRK-B", "NVDA"]
+    if ticker in dollar_tickers:
+        currency_symbol = "$"
+    else:
+        currency_symbol = "p"  # pence
+
     fig = go.Figure()
 
     # Price line
@@ -317,7 +324,7 @@ def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str, transactio
         fill="tozeroy",
         name="Price",
         line=dict(color="green", width=2),
-        hovertemplate="<b>Price</b><br>Date: %{x|%Y-%m-%d}<br>Price: £%{y:.2f}<extra></extra>",
+        hovertemplate=f"<b>Price</b><br>Date: %{{x|%Y-%m-%d}}<br>Price: {currency_symbol}%{{y:.2f}}<extra></extra>",
     ))
 
     # Add buy/sell markers if transactions data provided
@@ -396,6 +403,7 @@ def get_fund_mapping_status() -> pd.DataFrame:
 
     Returns DataFrame with columns:
     - fund_name: Original fund name
+    - mapped_fund_name: Mapped fund name (if available)
     - transaction_count: Number of transactions
     - ticker: Mapped ticker (if available)
     - has_price_history: Boolean indicating if price history exists
@@ -403,9 +411,10 @@ def get_fund_mapping_status() -> pd.DataFrame:
     db = TransactionDatabase("portfolio.db")
     cursor = db.conn.cursor()
 
-    # Get all funds with transaction counts
+    # Get all funds with transaction counts and mapped names
     cursor.execute("""
-        SELECT fund_name, COUNT(*) as transaction_count
+        SELECT fund_name, COUNT(*) as transaction_count,
+               MAX(COALESCE(mapped_fund_name, '')) as mapped_fund_name
         FROM transactions
         WHERE excluded = 0
         GROUP BY fund_name
@@ -416,6 +425,7 @@ def get_fund_mapping_status() -> pd.DataFrame:
     for row in cursor.fetchall():
         fund_name = row["fund_name"]
         transaction_count = row["transaction_count"]
+        mapped_fund_name = row["mapped_fund_name"] if row["mapped_fund_name"] else None
 
         # Get mapping for this fund
         mapping = db.get_ticker_for_fund(fund_name)
@@ -432,6 +442,7 @@ def get_fund_mapping_status() -> pd.DataFrame:
 
         data.append({
             "fund_name": fund_name,
+            "mapped_fund_name": mapped_fund_name if mapped_fund_name else "—",
             "transaction_count": transaction_count,
             "ticker": ticker if ticker else "—",
             "has_price_history": has_price_history
@@ -618,6 +629,15 @@ def main():
             transactions_df = get_transactions_for_ticker(selected_ticker)
             fund_name = ticker_info_dict.get(selected_ticker, selected_ticker)
 
+            # Determine currency symbol and format
+            dollar_tickers = ["BRK-B", "NVDA"]
+            if selected_ticker in dollar_tickers:
+                currency_symbol = "$"
+                price_format = lambda x: f"${x:.2f}"
+            else:
+                currency_symbol = "p"
+                price_format = lambda x: f"{x:.2f}p"
+
             if price_df.empty:
                 st.warning(f"No price history found for {selected_ticker}")
             else:
@@ -629,7 +649,7 @@ def main():
                     st.subheader(f"Fund: {fund_name}")
                 with col3:
                     latest_price = price_df['Price'].iloc[-1] if not price_df.empty else 0
-                    st.metric("Latest Price", f"£{latest_price:.2f}")
+                    st.metric("Latest Price", price_format(latest_price))
 
                 # Summary statistics
                 st.subheader("Statistics")
@@ -637,20 +657,20 @@ def main():
 
                 with col1:
                     min_price = price_df['Price'].min()
-                    st.metric("Min Price", f"£{min_price:.2f}")
+                    st.metric("Min Price", price_format(min_price))
 
                 with col2:
                     max_price = price_df['Price'].max()
-                    st.metric("Max Price", f"£{max_price:.2f}")
+                    st.metric("Max Price", price_format(max_price))
 
                 with col3:
                     avg_price = price_df['Price'].mean()
-                    st.metric("Average Price", f"£{avg_price:.2f}")
+                    st.metric("Average Price", price_format(avg_price))
 
                 with col4:
                     price_change = price_df['Price'].iloc[-1] - price_df['Price'].iloc[0]
                     pct_change = (price_change / price_df['Price'].iloc[0]) * 100 if price_df['Price'].iloc[0] != 0 else 0
-                    st.metric("Total Change", f"£{price_change:.2f} ({pct_change:+.1f}%)")
+                    st.metric("Total Change", f"{price_format(price_change)} ({pct_change:+.1f}%)")
 
                 # Price chart
                 st.subheader("Price Chart")
@@ -683,7 +703,7 @@ def main():
                 st.subheader("Price History Data")
                 df_display = price_df.copy()
                 df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
-                df_display["Price"] = df_display["Price"].apply(lambda x: f"£{x:.2f}")
+                df_display["Price"] = df_display["Price"].apply(price_format)
                 df_display = df_display[["Date", "Price"]].rename(columns={"Date": "Date", "Price": "Close Price"})
 
                 st.dataframe(df_display, width='stretch', hide_index=True)
@@ -703,6 +723,7 @@ def main():
             display_df = mapping_df.copy()
             display_df.rename(columns={
                 "fund_name": "Fund Name",
+                "mapped_fund_name": "Mapped Name",
                 "transaction_count": "Transactions",
                 "ticker": "Ticker",
                 "has_price_history": "Price History"
@@ -734,6 +755,7 @@ def main():
                 hide_index=True,
                 column_config={
                     "Fund Name": st.column_config.TextColumn("Fund Name", width="large"),
+                    "Mapped Name": st.column_config.TextColumn("Mapped Name", width="large"),
                     "Transactions": st.column_config.NumberColumn("Transactions", width="small"),
                     "Ticker": st.column_config.TextColumn("Ticker", width="medium"),
                     "Price History": st.column_config.TextColumn("Price History", width="small"),
