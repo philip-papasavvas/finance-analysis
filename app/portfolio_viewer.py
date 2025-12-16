@@ -309,11 +309,20 @@ def create_price_chart(df: pd.DataFrame, ticker: str, fund_name: str, transactio
         return None
 
     # Determine currency symbol based on ticker
-    dollar_tickers = ["BRK-B", "NVDA"]
-    if ticker in dollar_tickers:
-        currency_symbol = "$"
-    else:
-        currency_symbol = "p"  # pence
+    ticker_currency_map = {
+        'BRK-B': '$',
+        'EMIM.L': 'p',
+        'GB00B2PLJD73': '£',
+        'GB00BD6PG787': '£',
+        'GB00BF0TZG22': 'p',
+        'LU1033663649': '£',
+        'MWOT.DE': '€',
+        'NVDA': '$',
+        'VERG.L': '£',
+        'VUAG.L': '£',
+        'VWRP.L': '£'
+    }
+    currency_symbol = ticker_currency_map.get(ticker, '£')
 
     fig = go.Figure()
 
@@ -560,8 +569,11 @@ def main():
 
                 with col4:
                     buys_df = df[df["Type"] == "BUY"]
-                    total_invested = buys_df["Value (£)"].sum() if not buys_df.empty else 0
-                    st.metric("Total Invested (£)", f"£{total_invested:,.2f}")
+                    sells_df = df[df["Type"] == "SELL"]
+                    total_buys = buys_df["Value (£)"].sum() if not buys_df.empty else 0
+                    total_sells = sells_df["Value (£)"].sum() if not sells_df.empty else 0
+                    net = total_buys - total_sells
+                    st.metric("Net (Buys - Sells) (£)", f"£{net:,.2f}")
 
                 # Charts
                 st.subheader("Charts")
@@ -630,13 +642,30 @@ def main():
             fund_name = ticker_info_dict.get(selected_ticker, selected_ticker)
 
             # Determine currency symbol and format
-            dollar_tickers = ["BRK-B", "NVDA"]
-            if selected_ticker in dollar_tickers:
-                currency_symbol = "$"
+            ticker_currency_map = {
+                'BRK-B': '$',
+                'EMIM.L': 'p',
+                'GB00B2PLJD73': '£',
+                'GB00BD6PG787': '£',
+                'GB00BF0TZG22': 'p',
+                'LU1033663649': '£',
+                'MWOT.DE': '€',
+                'NVDA': '$',
+                'VERG.L': '£',
+                'VUAG.L': '£',
+                'VWRP.L': '£'
+            }
+            currency_symbol = ticker_currency_map.get(selected_ticker, '£')
+
+            # Format function based on currency
+            if currency_symbol == '$':
                 price_format = lambda x: f"${x:.2f}"
-            else:
-                currency_symbol = "p"
+            elif currency_symbol == 'p':
                 price_format = lambda x: f"{x:.2f}p"
+            elif currency_symbol == '€':
+                price_format = lambda x: f"€{x:.2f}"
+            else:  # £
+                price_format = lambda x: f"£{x:.2f}"
 
             if price_df.empty:
                 st.warning(f"No price history found for {selected_ticker}")
@@ -651,26 +680,45 @@ def main():
                     latest_price = price_df['Price'].iloc[-1] if not price_df.empty else 0
                     st.metric("Latest Price", price_format(latest_price))
 
-                # Summary statistics
+                # Summary statistics - Min Price and Total Change
                 st.subheader("Statistics")
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2 = st.columns(2)
 
                 with col1:
                     min_price = price_df['Price'].min()
                     st.metric("Min Price", price_format(min_price))
 
                 with col2:
-                    max_price = price_df['Price'].max()
-                    st.metric("Max Price", price_format(max_price))
-
-                with col3:
-                    avg_price = price_df['Price'].mean()
-                    st.metric("Average Price", price_format(avg_price))
-
-                with col4:
                     price_change = price_df['Price'].iloc[-1] - price_df['Price'].iloc[0]
                     pct_change = (price_change / price_df['Price'].iloc[0]) * 100 if price_df['Price'].iloc[0] != 0 else 0
                     st.metric("Total Change", f"{price_format(price_change)} ({pct_change:+.1f}%)")
+
+                # Yearly performance analysis
+                st.subheader("Yearly Performance")
+                price_df_yearly = price_df.copy()
+                price_df_yearly['Year'] = pd.to_datetime(price_df_yearly['Date']).dt.year
+
+                yearly_data = []
+                for year in sorted(price_df_yearly['Year'].unique()):
+                    year_prices = price_df_yearly[price_df_yearly['Year'] == year]
+                    if not year_prices.empty:
+                        open_price = year_prices.iloc[0]['Price']
+                        close_price = year_prices.iloc[-1]['Price']
+                        year_change = close_price - open_price
+                        year_pct_change = (year_change / open_price * 100) if open_price != 0 else 0
+
+                        yearly_data.append({
+                            'Year': int(year),
+                            'Open Price': price_format(open_price),
+                            'Close Price': price_format(close_price),
+                            'Change %': f"{year_pct_change:+.2f}%"
+                        })
+
+                if yearly_data:
+                    yearly_df = pd.DataFrame(yearly_data)
+                    st.dataframe(yearly_df, width='stretch', hide_index=True)
+                else:
+                    st.info("No yearly data available")
 
                 # Price chart
                 st.subheader("Price Chart")
@@ -699,14 +747,15 @@ def main():
                 else:
                     st.info("No buy/sell transactions found for this ticker")
 
-                # Price data table
-                st.subheader("Price History Data")
-                df_display = price_df.copy()
-                df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
-                df_display["Price"] = df_display["Price"].apply(price_format)
-                df_display = df_display[["Date", "Price"]].rename(columns={"Date": "Date", "Price": "Close Price"})
+                # Price data table - behind a button
+                if st.button("Show Price History Data", key="show_price_history_btn"):
+                    st.subheader("Price History Data")
+                    df_display = price_df.copy()
+                    df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
+                    df_display["Price"] = df_display["Price"].apply(price_format)
+                    df_display = df_display[["Date", "Price"]].rename(columns={"Date": "Date", "Price": "Close Price"})
 
-                st.dataframe(df_display, width='stretch', hide_index=True)
+                    st.dataframe(df_display, width='stretch', hide_index=True)
 
     # ==================== TAB 4: MAPPING STATUS ====================
     with tab4:
