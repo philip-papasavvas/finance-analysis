@@ -14,6 +14,7 @@ class Platform(Enum):
     """Supported trading platforms."""
     FIDELITY = auto()
     INTERACTIVE_INVESTOR = auto()
+    INVEST_ENGINE = auto()
 
     def __str__(self) -> str:
         return self.name.replace("_", " ").title()
