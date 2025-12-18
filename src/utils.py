@@ -34,10 +34,12 @@ def parse_date(
 
     if formats is None:
         formats = [
-            "%d/%m/%Y",      # 16/01/2023
-            "%d %b %Y",      # 16 Jan 2023
-            "%Y-%m-%d",      # 2023-01-16
-            "%d-%m-%Y",      # 16-01-2023
+            "%d/%m/%Y",           # 16/01/2023
+            "%d %b %Y",           # 16 Jan 2023
+            "%Y-%m-%d",           # 2023-01-16
+            "%d-%m-%Y",           # 16-01-2023
+            "%d/%m/%y %H:%M:%S",  # 16/01/23 15:30:45 (InvestEngine format)
+            "%d/%m/%y",           # 16/01/23
         ]
 
     value = str(value).strip()
