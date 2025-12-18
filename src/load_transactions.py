@@ -4,7 +4,7 @@ Load all transactions from CSV files and display summary.
 import logging
 from pathlib import Path
 
-from src.loaders import FidelityLoader, InteractiveInvestorLoader
+from src.loaders import FidelityLoader, InteractiveInvestorLoader, InvestEngineLoader
 from src.reports import TransactionReport, get_unique_funds
 
 # Configure logging
@@ -38,8 +38,17 @@ def main():
     )
     ii_transactions = ii_loader.load()
 
+    # Load InvestEngine transactions
+    logger.info("Loading InvestEngine transactions...")
+    invest_engine_loader = InvestEngineLoader(
+        data_directory=data_dir,
+        file_pattern="invest_engine_*.csv",
+        skip_rows=1,
+    )
+    invest_engine_transactions = invest_engine_loader.load()
+
     # Combine all transactions
-    all_transactions = fidelity_transactions + ii_transactions
+    all_transactions = fidelity_transactions + ii_transactions + invest_engine_transactions
     all_transactions.sort(key=lambda t: t.date)
 
     logger.info(f"\n{'='*80}")
@@ -47,6 +56,7 @@ def main():
     logger.info(f"{'='*80}")
     logger.info(f"Total Fidelity transactions: {len(fidelity_transactions)}")
     logger.info(f"Total II transactions: {len(ii_transactions)}")
+    logger.info(f"Total InvestEngine transactions: {len(invest_engine_transactions)}")
     logger.info(f"Total transactions: {len(all_transactions)}")
 
     if all_transactions:
