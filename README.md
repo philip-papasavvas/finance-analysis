@@ -76,8 +76,8 @@ pip install pandas scipy pyyaml streamlit plotly
 
 ```
 finance-analysis/
-├── src/
-│   ├── database.py               # SQLite database manager (core CRUD operations)
+├── portfolio/
+│   ├── core/               # SQLite database manager (core CRUD operations)
 │   ├── models.py                 # Data models (Transaction, Platform, TaxWrapper enums)
 │   ├── loaders.py                # Platform-specific CSV parsers (Fidelity, II, InvestEngine)
 │   ├── load_transactions.py      # Main transaction loading script
@@ -93,7 +93,7 @@ finance-analysis/
 │   ├── utils.py                  # Utility functions
 │   ├── reports.py                # Report generation utilities
 │   └── query_database.py         # Database query utilities
-├── scripts/
+├── &
 │   └── update_prices.py          # CLI tool for price updates (recommended)
 ├── app/
 │   └── portfolio_viewer.py       # Streamlit web dashboard
@@ -200,19 +200,19 @@ Use the price update script to download/update historical prices:
 
 ```bash
 # Update all tickers for the last 30 days
-python scripts/update_prices.py
+python &update_prices.py
 
 # Update specific date range
-python scripts/update_prices.py --min-date 2024-01-01 --max-date 2024-12-31
+python &update_prices.py --min-date 2024-01-01 --max-date 2024-12-31
 
 # Update specific tickers only
-python scripts/update_prices.py --tickers SUUS.L SMT.L
+python &update_prices.py --tickers SUUS.L SMT.L
 
 # Full historical backfill
-python scripts/update_prices.py --backfill --min-date 2019-01-01
+python &update_prices.py --backfill --min-date 2019-01-01
 
 # Preview changes without committing (dry run)
-python scripts/update_prices.py --dry-run
+python &update_prices.py --dry-run
 ```
 
 This downloads daily closing prices from Yahoo Finance and stores them in the `price_history` table.

@@ -11,9 +11,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # Add parent directory to path so we can import src
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# sys.path adjustment no longer needed - using proper package structure
 
-from src.database import TransactionDatabase
+from portfolio.core.database import TransactionDatabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -483,6 +483,47 @@ def get_fund_mapping_status() -> pd.DataFrame:
     return df
 
 
+def get_current_holdings_vip():
+    """Get current holdings for VIP funds only."""
+    db = TransactionDatabase("portfolio.db")
+    cursor = db.conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            COALESCE(t.mapped_fund_name, t.fund_name) as fund_name,
+            t.tax_wrapper,
+            ftm.ticker,
+            SUM(CASE WHEN t.transaction_type = 'BUY' THEN t.units ELSE -t.units END) as current_units,
+            (SELECT close_price FROM price_history WHERE ticker = ftm.ticker ORDER BY date DESC LIMIT 1) as latest_price,
+            (SELECT date FROM price_history WHERE ticker = ftm.ticker ORDER BY date DESC LIMIT 1) as price_date
+        FROM transactions t
+        LEFT JOIN fund_ticker_mapping ftm ON t.fund_name = ftm.fund_name
+        WHERE ftm.vip = 1 AND t.excluded = 0
+        GROUP BY t.fund_name, t.mapped_fund_name, t.tax_wrapper, ftm.ticker
+        HAVING current_units > 0
+        ORDER BY fund_name, t.tax_wrapper
+    """)
+
+    data = []
+    for row in cursor.fetchall():
+        units = row["current_units"]
+        price = row["latest_price"] if row["latest_price"] else 0
+        value = units * price
+
+        data.append({
+            "fund_name": row["fund_name"],
+            "tax_wrapper": row["tax_wrapper"],
+            "ticker": row["ticker"],
+            "units": units,
+            "price": price,
+            "value": value,
+            "price_date": row["price_date"]
+        })
+
+    db.close()
+    return pd.DataFrame(data)
+
+
 def main():
     """Main Streamlit app."""
     st.set_page_config(page_title="Portfolio Viewer", layout="wide")
@@ -491,10 +532,114 @@ def main():
     st.markdown("Track your fund transactions and holdings")
 
     # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Portfolio Overview", "🔍 Fund Breakdown", "📈 Price History", "📋 Mapping Status"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🏠 Current Holdings",
+        "📊 Portfolio Overview",
+        "🔍 Fund Breakdown",
+        "📈 Price History",
+        "📋 Mapping Status"
+    ])
 
-    # ==================== TAB 1: PORTFOLIO OVERVIEW ====================
+    # ==================== TAB 1: CURRENT HOLDINGS ====================
     with tab1:
+        st.header("💼 Current Holdings (VIP Funds)")
+        st.markdown("Your priority fund holdings with current values")
+
+        # Get VIP holdings
+        holdings_df = get_current_holdings_vip()
+
+        if holdings_df.empty:
+            st.warning("No VIP holdings found. Mark funds as VIP in the fund_ticker_mapping table.")
+            return
+
+        # Calculate total portfolio value
+        total_value = holdings_df['value'].sum()
+
+        # Display total value at top
+        col1, col2, col3 = st.columns([2, 2, 2])
+        with col1:
+            st.metric("💰 Total Portfolio Value", f"£{total_value:,.2f}")
+        with col2:
+            vip_count = holdings_df['ticker'].nunique()
+            st.metric("📊 VIP Funds", vip_count)
+        with col3:
+            latest_price_date = holdings_df['price_date'].max() if 'price_date' in holdings_df.columns else "Unknown"
+            st.metric("📅 Last Updated", latest_price_date if latest_price_date else "N/A")
+
+        st.divider()
+
+        # ---- Holdings by Tax Wrapper (Horizontal Bar Chart) ----
+        st.subheader("📈 Holdings by Tax Wrapper")
+
+        # Aggregate by tax wrapper for the chart
+        wrapper_totals = holdings_df.groupby('tax_wrapper')['value'].sum().reset_index()
+        wrapper_totals = wrapper_totals.sort_values('value', ascending=True)
+
+        # Color mapping for tax wrappers
+        wrapper_colors = {
+            'ISA': '#1f77b4',    # Blue
+            'SIPP': '#2ca02c',   # Green
+            'GIA': '#ff7f0e',    # Orange
+            'OTHER': '#d62728'   # Red
+        }
+        colors = [wrapper_colors.get(w, '#7f7f7f') for w in wrapper_totals['tax_wrapper']]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=wrapper_totals['tax_wrapper'],
+            x=wrapper_totals['value'],
+            orientation='h',
+            marker=dict(color=colors),
+            text=wrapper_totals['value'].apply(lambda x: f'£{x:,.0f}'),
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Value: £%{x:,.2f}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title="Total Value by Tax Wrapper",
+            xaxis_title="Value (£)",
+            yaxis_title="",
+            height=300,
+            template="plotly_white",
+            showlegend=False,
+            margin=dict(l=100, r=100, t=50, b=50)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
+
+        # ---- Detailed Holdings Table ----
+        st.subheader("📋 Detailed Holdings")
+
+        # Create display dataframe
+        display_df = holdings_df.copy()
+        display_df['Units'] = display_df['units'].apply(lambda x: f"{x:,.2f}")
+        display_df['Price'] = display_df['price'].apply(lambda x: f"£{x:.2f}")
+        display_df['Value'] = display_df['value'].apply(lambda x: f"£{x:,.2f}")
+        display_df['% of Portfolio'] = (holdings_df['value'] / total_value * 100).apply(lambda x: f"{x:.1f}%")
+
+        # Select and rename columns for display
+        display_df = display_df[['fund_name', 'tax_wrapper', 'ticker', 'Units', 'Price', 'Value', '% of Portfolio']]
+        display_df.columns = ['Fund Name', 'Tax Wrapper', 'Ticker', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
+
+        st.dataframe(
+            display_df,
+            width='stretch',
+            hide_index=True,
+            column_config={
+                "Fund Name": st.column_config.TextColumn("Fund Name", width="large"),
+                "Tax Wrapper": st.column_config.TextColumn("Tax Wrapper", width="small"),
+                "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+                "Units": st.column_config.TextColumn("Units", width="small"),
+                "Latest Price": st.column_config.TextColumn("Latest Price", width="small"),
+                "Current Value": st.column_config.TextColumn("Current Value", width="medium"),
+                "% of Portfolio": st.column_config.TextColumn("% of Portfolio", width="small"),
+            }
+        )
+
+    # ==================== TAB 2: PORTFOLIO OVERVIEW ====================
+    with tab2:
         st.header("Portfolio Overview")
 
         # Get all funds and holdings
@@ -533,8 +678,8 @@ def main():
         else:
             st.info("No funds found")
 
-    # ==================== TAB 2: FUND BREAKDOWN ====================
-    with tab2:
+    # ==================== TAB 3: FUND BREAKDOWN ====================
+    with tab3:
         st.header("Fund Breakdown")
 
         # Fund selector at the top
@@ -634,8 +779,8 @@ def main():
                     mime="text/csv",
                 )
 
-    # ==================== TAB 3: PRICE HISTORY ====================
-    with tab3:
+    # ==================== TAB 4: PRICE HISTORY ====================
+    with tab4:
         st.header("Price History")
 
         # Get all available tickers
@@ -779,8 +924,8 @@ def main():
 
                     st.dataframe(df_display, width='stretch', hide_index=True)
 
-    # ==================== TAB 4: MAPPING STATUS ====================
-    with tab4:
+    # ==================== TAB 5: MAPPING STATUS ====================
+    with tab5:
         st.header("Mapping Status")
         st.markdown("Overview of fund-to-ticker mappings and price history availability")
 

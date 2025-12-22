@@ -41,7 +41,7 @@ import pandas as pd
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.database import TransactionDatabase
+from portfolio.core.database import TransactionDatabase
 
 # Attempt to import yfinance
 try:
