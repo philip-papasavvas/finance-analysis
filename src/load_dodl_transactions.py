@@ -6,6 +6,7 @@ Handles data cleaning (currency symbols, commas) and calculates price_per_unit.
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 
@@ -68,7 +69,11 @@ def load_dodl_transactions(json_path: str, db_path: str = 'portfolio.db'):
 
 
 if __name__ == '__main__':
-    json_file = 'data/dodl_transactions.json'
+    # Accept JSON file path as argument, default to dodl_transactions.json
+    if len(sys.argv) > 1:
+        json_file = sys.argv[1]
+    else:
+        json_file = 'data/dodl_transactions.json'
 
     if not Path(json_file).exists():
         print(f"Error: {json_file} not found")
