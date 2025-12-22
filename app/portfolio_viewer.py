@@ -159,11 +159,20 @@ def get_fund_holdings() -> pd.DataFrame:
 
 
 def get_standardized_name(original_name: str) -> str:
-    """Get the standardized name for a fund."""
+    """Get the standardized/mapped name for a fund from transactions table."""
     db = TransactionDatabase("portfolio.db")
-    standardized = db.get_standardized_name(original_name)
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT COALESCE(mapped_fund_name, fund_name) as display_name
+        FROM transactions
+        WHERE fund_name = ?
+        LIMIT 1
+    """, (original_name,))
+    result = cursor.fetchone()
     db.close()
-    return standardized
+    if result:
+        return result["display_name"]
+    return original_name
 
 
 def create_timeline_chart(df: pd.DataFrame, fund_name: str) -> go.Figure:
