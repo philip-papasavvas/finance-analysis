@@ -484,41 +484,68 @@ def get_fund_mapping_status() -> pd.DataFrame:
 
 
 def get_current_holdings_vip():
-    """Get current holdings for VIP funds only."""
+    """Get current holdings from JSON file for VIP funds only, using mapped fund names."""
+    import json
+
     db = TransactionDatabase("portfolio.db")
     cursor = db.conn.cursor()
 
+    # Load holdings from JSON file (new format: grouped by ticker)
+    holdings_file = 'data/current_holdings.json'
+    try:
+        with open(holdings_file, 'r') as f:
+            holdings_by_ticker = json.load(f)
+    except FileNotFoundError:
+        logger.error(f"Holdings file not found: {holdings_file}")
+        return pd.DataFrame()
+
+    # Get VIP ticker info with mapped names and prices
     cursor.execute("""
-        SELECT
-            COALESCE(t.mapped_fund_name, t.fund_name) as fund_name,
-            t.tax_wrapper,
+        SELECT DISTINCT
             ftm.ticker,
-            SUM(CASE WHEN t.transaction_type = 'BUY' THEN t.units ELSE -t.units END) as current_units,
+            ftm.vip,
+            COALESCE(
+                (SELECT COALESCE(mapped_fund_name, fund_name) FROM transactions WHERE fund_name = ftm.fund_name LIMIT 1),
+                ftm.fund_name
+            ) as mapped_name,
             (SELECT close_price FROM price_history WHERE ticker = ftm.ticker ORDER BY date DESC LIMIT 1) as latest_price,
             (SELECT date FROM price_history WHERE ticker = ftm.ticker ORDER BY date DESC LIMIT 1) as price_date
-        FROM transactions t
-        LEFT JOIN fund_ticker_mapping ftm ON t.fund_name = ftm.fund_name
-        WHERE ftm.vip = 1 AND t.excluded = 0
-        GROUP BY t.fund_name, t.mapped_fund_name, t.tax_wrapper, ftm.ticker
-        HAVING current_units > 0
-        ORDER BY fund_name, t.tax_wrapper
+        FROM fund_ticker_mapping ftm
+        WHERE ftm.vip = 1
     """)
 
-    data = []
+    ticker_info = {}
     for row in cursor.fetchall():
-        units = row["current_units"]
-        price = row["latest_price"] if row["latest_price"] else 0
-        value = units * price
+        ticker_info[row["ticker"]] = {
+            'mapped_name': row["mapped_name"] if row["mapped_name"] else "Unknown",
+            'price': row["latest_price"] if row["latest_price"] else 0,
+            'price_date': row["price_date"]
+        }
 
-        data.append({
-            "fund_name": row["fund_name"],
-            "tax_wrapper": row["tax_wrapper"],
-            "ticker": row["ticker"],
-            "units": units,
-            "price": price,
-            "value": value,
-            "price_date": row["price_date"]
-        })
+    # Process holdings from new JSON format (grouped by ticker)
+    data = []
+    for ticker, ticker_data in holdings_by_ticker.items():
+        # Only include VIP funds
+        if ticker not in ticker_info:
+            continue
+
+        info = ticker_info[ticker]
+
+        # Process each holding for this ticker
+        for holding in ticker_data.get('holdings', []):
+            units = holding.get('units', 0)
+            value = units * info['price']
+
+            data.append({
+                "fund_name": info['mapped_name'],  # Use mapped name from database
+                "tax_wrapper": holding.get('tax_wrapper'),
+                "platform": holding.get('platform'),
+                "ticker": ticker,
+                "units": units,
+                "price": info['price'],
+                "value": value,
+                "price_date": info['price_date']
+            })
 
     db.close()
     return pd.DataFrame(data)
@@ -568,12 +595,8 @@ def main():
 
         st.divider()
 
-        # ---- Holdings by Tax Wrapper (Horizontal Bar Chart) ----
-        st.subheader("📈 Holdings by Tax Wrapper")
-
-        # Aggregate by tax wrapper for the chart
-        wrapper_totals = holdings_df.groupby('tax_wrapper')['value'].sum().reset_index()
-        wrapper_totals = wrapper_totals.sort_values('value', ascending=True)
+        # ---- Holdings by Fund (Horizontal Stacked Bar Chart) ----
+        st.subheader("📈 Holdings by Fund & Tax Wrapper")
 
         # Color mapping for tax wrappers
         wrapper_colors = {
@@ -582,27 +605,49 @@ def main():
             'GIA': '#ff7f0e',    # Orange
             'OTHER': '#d62728'   # Red
         }
-        colors = [wrapper_colors.get(w, '#7f7f7f') for w in wrapper_totals['tax_wrapper']]
 
+        # Create stacked bar chart (funds on Y-axis, wrappers as stacked segments)
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            y=wrapper_totals['tax_wrapper'],
-            x=wrapper_totals['value'],
-            orientation='h',
-            marker=dict(color=colors),
-            text=wrapper_totals['value'].apply(lambda x: f'£{x:,.0f}'),
-            textposition='outside',
-            hovertemplate='<b>%{y}</b><br>Value: £%{x:,.2f}<extra></extra>'
-        ))
+
+        # Get unique funds and wrappers
+        funds = holdings_df['fund_name'].unique()
+        wrappers = ['ISA', 'SIPP', 'GIA', 'OTHER']
+
+        # Add a trace for each tax wrapper
+        for wrapper in wrappers:
+            wrapper_data = holdings_df[holdings_df['tax_wrapper'] == wrapper]
+            if not wrapper_data.empty:
+                # Create a list of values for each fund (0 if fund doesn't have this wrapper)
+                values = []
+                for fund in funds:
+                    fund_value = wrapper_data[wrapper_data['fund_name'] == fund]['value'].sum()
+                    values.append(fund_value)
+
+                fig.add_trace(go.Bar(
+                    name=wrapper,
+                    y=funds,
+                    x=values,
+                    orientation='h',
+                    marker=dict(color=wrapper_colors.get(wrapper, '#7f7f7f')),
+                    hovertemplate=f'<b>{wrapper}</b><br>%{{y}}<br>Value: £%{{x:,.2f}}<extra></extra>'
+                ))
 
         fig.update_layout(
-            title="Total Value by Tax Wrapper",
+            title="Holdings by Fund (Stacked by Tax Wrapper)",
             xaxis_title="Value (£)",
             yaxis_title="",
-            height=300,
+            height=400,
+            barmode='stack',
             template="plotly_white",
-            showlegend=False,
-            margin=dict(l=100, r=100, t=50, b=50)
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=200, r=100, t=80, b=50)
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -612,31 +657,112 @@ def main():
         # ---- Detailed Holdings Table ----
         st.subheader("📋 Detailed Holdings")
 
-        # Create display dataframe
-        display_df = holdings_df.copy()
-        display_df['Units'] = display_df['units'].apply(lambda x: f"{x:,.2f}")
-        display_df['Price'] = display_df['price'].apply(lambda x: f"£{x:.2f}")
-        display_df['Value'] = display_df['value'].apply(lambda x: f"£{x:,.2f}")
-        display_df['% of Portfolio'] = (holdings_df['value'] / total_value * 100).apply(lambda x: f"{x:.1f}%")
+        # Tax wrapper filter checkboxes
+        col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
+        with col_filter1:
+            show_isa = st.checkbox("🔵 ISA", value=True, key="show_isa")
+        with col_filter2:
+            show_sipp = st.checkbox("🟢 SIPP", value=True, key="show_sipp")
+        with col_filter3:
+            show_gia = st.checkbox("🟠 GIA", value=True, key="show_gia")
+        with col_filter4:
+            show_other = st.checkbox("🔴 OTHER", value=True, key="show_other")
 
-        # Select and rename columns for display
-        display_df = display_df[['fund_name', 'tax_wrapper', 'ticker', 'Units', 'Price', 'Value', '% of Portfolio']]
-        display_df.columns = ['Fund Name', 'Tax Wrapper', 'Ticker', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
+        # Filter holdings based on selected tax wrappers
+        filtered_df = holdings_df.copy()
+        wrapper_filters = []
+        if show_isa:
+            wrapper_filters.append('ISA')
+        if show_sipp:
+            wrapper_filters.append('SIPP')
+        if show_gia:
+            wrapper_filters.append('GIA')
+        if show_other:
+            wrapper_filters.append('OTHER')
 
-        st.dataframe(
-            display_df,
-            width='stretch',
-            hide_index=True,
-            column_config={
-                "Fund Name": st.column_config.TextColumn("Fund Name", width="large"),
-                "Tax Wrapper": st.column_config.TextColumn("Tax Wrapper", width="small"),
-                "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-                "Units": st.column_config.TextColumn("Units", width="small"),
-                "Latest Price": st.column_config.TextColumn("Latest Price", width="small"),
-                "Current Value": st.column_config.TextColumn("Current Value", width="medium"),
-                "% of Portfolio": st.column_config.TextColumn("% of Portfolio", width="small"),
-            }
-        )
+        if wrapper_filters:
+            filtered_df = filtered_df[filtered_df['tax_wrapper'].isin(wrapper_filters)]
+        else:
+            filtered_df = pd.DataFrame()  # Empty if no filters selected
+
+        if not filtered_df.empty:
+            # Recalculate total for filtered holdings
+            filtered_total = filtered_df['value'].sum()
+
+            # Create display dataframe with raw numeric values for formatting
+            display_df = filtered_df.copy()
+            display_df['pct_of_portfolio'] = (filtered_df['value'] / total_value * 100)
+
+            # Color code tax wrappers
+            def color_tax_wrapper(wrapper):
+                colors = {
+                    'ISA': '🔵 ISA',
+                    'SIPP': '🟢 SIPP',
+                    'GIA': '🟠 GIA',
+                    'OTHER': '🔴 OTHER'
+                }
+                return colors.get(wrapper, wrapper)
+
+            display_df['tax_wrapper_colored'] = display_df['tax_wrapper'].apply(color_tax_wrapper)
+
+            # Select and reorder columns for display (Tax Wrapper first)
+            display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'ticker', 'units', 'price', 'value', 'pct_of_portfolio']]
+            display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Ticker', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
+
+            # Show filtered total
+            st.info(f"Showing {len(display_df)} holdings | Total Value: £{filtered_total:,.2f}")
+
+            # Display table with increased width
+            st.dataframe(
+                display_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Tax Wrapper": st.column_config.TextColumn(
+                        "Tax Wrapper",
+                        width="small"
+                    ),
+                    "Fund Name": st.column_config.TextColumn(
+                        "Fund Name",
+                        width="large",
+                        help="Fund name from database mapping"
+                    ),
+                    "Platform": st.column_config.TextColumn(
+                        "Platform",
+                        width="medium"
+                    ),
+                    "Ticker": st.column_config.TextColumn(
+                        "Ticker",
+                        width="medium"
+                    ),
+                    "Units": st.column_config.NumberColumn(
+                        "Units",
+                        format="%.2f",
+                        width="small"
+                    ),
+                    "Latest Price": st.column_config.NumberColumn(
+                        "Latest Price",
+                        format="£%.2f",
+                        width="small"
+                    ),
+                    "Current Value": st.column_config.NumberColumn(
+                        "Current Value",
+                        format="£%,.2f",
+                        width="medium",
+                        help="Current market value of this holding"
+                    ),
+                    "% of Portfolio": st.column_config.ProgressColumn(
+                        "% of Portfolio",
+                        format="%.1f%%",
+                        min_value=0,
+                        max_value=100,
+                        width="medium",
+                        help="Percentage of total VIP portfolio value"
+                    )
+                }
+            )
+        else:
+            st.warning("No holdings to display with current filters")
 
     # ==================== TAB 2: PORTFOLIO OVERVIEW ====================
     with tab2:
