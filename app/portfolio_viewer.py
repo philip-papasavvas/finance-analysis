@@ -561,8 +561,8 @@ def main():
     # Create tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🏠 Current Holdings",
-        "📊 Portfolio Overview",
-        "🔍 Fund Breakdown",
+        "📊 Funds List",
+        "🔍 Transaction History",
         "📈 Price History",
         "📋 Mapping Status"
     ])
@@ -590,8 +590,13 @@ def main():
             vip_count = holdings_df['ticker'].nunique()
             st.metric("📊 VIP Funds", vip_count)
         with col3:
-            latest_price_date = holdings_df['price_date'].max() if 'price_date' in holdings_df.columns else "Unknown"
-            st.metric("📅 Last Updated", latest_price_date if latest_price_date else "N/A")
+            # Get latest price date, filtering out None values
+            if 'price_date' in holdings_df.columns:
+                valid_dates = holdings_df['price_date'].dropna()
+                latest_price_date = valid_dates.max() if not valid_dates.empty else "N/A"
+            else:
+                latest_price_date = "N/A"
+            st.metric("📅 Last Updated", latest_price_date)
 
         st.divider()
 
@@ -609,8 +614,10 @@ def main():
         # Create stacked bar chart (funds on Y-axis, wrappers as stacked segments)
         fig = go.Figure()
 
-        # Get unique funds and wrappers
-        funds = holdings_df['fund_name'].unique()
+        # Get unique funds sorted by total value (ascending for chart display)
+        # Note: Plotly displays horizontal bars bottom-to-top, so ascending order puts largest at top
+        fund_totals = holdings_df.groupby('fund_name')['value'].sum().sort_values(ascending=True)
+        funds = fund_totals.index.tolist()
         wrappers = ['ISA', 'SIPP', 'GIA', 'OTHER']
 
         # Add a trace for each tax wrapper
@@ -701,9 +708,9 @@ def main():
 
             display_df['tax_wrapper_colored'] = display_df['tax_wrapper'].apply(color_tax_wrapper)
 
-            # Select and reorder columns for display (Tax Wrapper first)
-            display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'ticker', 'units', 'price', 'value', 'pct_of_portfolio']]
-            display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Ticker', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
+            # Select and reorder columns for display (Tax Wrapper first, excluding ticker)
+            display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'units', 'price', 'value', 'pct_of_portfolio']]
+            display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
 
             # Show filtered total
             st.info(f"Showing {len(display_df)} holdings | Total Value: £{filtered_total:,.2f}")
@@ -725,10 +732,6 @@ def main():
                     ),
                     "Platform": st.column_config.TextColumn(
                         "Platform",
-                        width="medium"
-                    ),
-                    "Ticker": st.column_config.TextColumn(
-                        "Ticker",
                         width="medium"
                     ),
                     "Units": st.column_config.NumberColumn(
@@ -760,9 +763,9 @@ def main():
         else:
             st.warning("No holdings to display with current filters")
 
-    # ==================== TAB 2: PORTFOLIO OVERVIEW ====================
+    # ==================== TAB 2: FUNDS LIST ====================
     with tab2:
-        st.header("Portfolio Overview")
+        st.header("Funds List")
 
         # Get all funds and holdings
         funds_dict = get_all_funds_from_db()
@@ -800,9 +803,9 @@ def main():
         else:
             st.info("No funds found")
 
-    # ==================== TAB 3: FUND BREAKDOWN ====================
+    # ==================== TAB 3: TRANSACTION HISTORY ====================
     with tab3:
-        st.header("Fund Breakdown")
+        st.header("Transaction History")
 
         # Fund selector at the top
         funds_dict = get_all_funds_from_db()
