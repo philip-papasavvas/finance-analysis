@@ -12,14 +12,31 @@ Portfolio Fund Viewer loads transaction history CSV files from multiple platform
 - Excluding funds from the portfolio view
 - Exporting transaction data to CSV
 
+## Current Development
+
+### Dashboard Redesign - Current Holdings Focus
+
+**In Progress**: Redesigning the Streamlit dashboard to focus on current holdings and VIP funds.
+
+**Todo List:**
+1. ⏳ **User to share current holdings** (fund name/ticker + units held)
+2. ⏳ **Create Current Holdings landing page component**
+3. ⏳ **Calculate current values** using latest prices from price_history
+4. ⏳ **Add total portfolio value and breakdown visualizations**
+5. ⏳ **Add VIP-only filter toggle** to fund breakdown page
+6. ⏳ **Set Current Holdings as default landing page**
+
+---
+
 ## Features
 
 - **Interactive Streamlit Dashboard**: Two-tab interface with Portfolio Overview and Fund Breakdown
-- **Multi-platform support**: Fidelity, Interactive Investor, and InvestEngine CSV formats
+- **Multi-platform support**: Fidelity, Interactive Investor, InvestEngine, and DODL CSV formats
 - **Tax wrapper awareness**: ISA, SIPP, and GIA support
 - **Fund name mapping**: Map original fund names to standardized display names via JSON configuration
 - **Price history**: Download and store daily price data from Yahoo Finance (yfinance)
 - **Fund-to-ticker mapping**: Link funds to tickers for price charts and valuations
+- **VIP fund flagging**: Mark priority tickers for easier tracking
 - **Fund exclusion**: Mark specific funds as excluded from portfolio view
 - **Database validation**: Built-in script to check data integrity
 - **SQLite database**: Persistent storage with transaction history, price data, and mappings
