@@ -31,9 +31,21 @@ class TransactionDatabase:
         logger.info(f"Connected to database: {self.db_path}")
 
     def create_tables(self) -> None:
-        """Create the transactions and fund_name_mapping tables if they don't exist."""
+        """
+        Create the database tables if they don't exist.
+
+        Tables created:
+        - transactions: Core buy/sell transaction data from trading platforms
+        - price_history: Daily closing prices for tickers (from yfinance)
+        - fund_ticker_mapping: Maps fund names to ticker symbols for price lookup
+
+        Note: mapping_status table is created separately by migrate_ticker_mappings.py
+        See DATABASE_SCHEMA.md for full documentation.
+        """
         cursor = self.conn.cursor()
 
+        # transactions: Core transaction data from all trading platforms
+        # Contains buy/sell records, fund names, values, and mapped names
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,15 +68,8 @@ class TransactionDatabase:
             )
         """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fund_name_mapping (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                original_name TEXT NOT NULL UNIQUE,
-                standardized_name TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
+        # price_history: Daily closing prices for all tracked tickers
+        # Data sourced from yfinance; used for charts and valuations
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,15 +96,14 @@ class TransactionDatabase:
             CREATE INDEX IF NOT EXISTS idx_tax_wrapper ON transactions(tax_wrapper)
         """)
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_original_name ON fund_name_mapping(original_name)
-        """)
-        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_price_date ON price_history(date)
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_price_ticker ON price_history(ticker)
         """)
 
+        # fund_ticker_mapping: Links fund names to ticker symbols
+        # Enables joining transactions to price_history for valuations
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS fund_ticker_mapping (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,79 +308,6 @@ class TransactionDatabase:
             ORDER BY fund_name
         """)
         return [row["fund_name"] for row in cursor.fetchall()]
-
-    def add_fund_mapping(self, original_name: str, standardized_name: str) -> bool:
-        """
-        Add a fund name mapping to the database.
-
-        Args:
-            original_name: The original fund name.
-            standardized_name: The standardized fund name.
-
-        Returns:
-            True if inserted, False if mapping already exists.
-        """
-        cursor = self.conn.cursor()
-
-        try:
-            cursor.execute("""
-                INSERT INTO fund_name_mapping (original_name, standardized_name)
-                VALUES (?, ?)
-            """, (original_name, standardized_name))
-            self.conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            # Mapping already exists
-            return False
-
-    def get_standardized_name(self, original_name: str) -> str:
-        """
-        Get the standardized name for a fund.
-
-        Args:
-            original_name: The original fund name.
-
-        Returns:
-            The standardized name if mapping exists, otherwise the original name.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT standardized_name FROM fund_name_mapping
-            WHERE original_name = ?
-        """, (original_name,))
-        result = cursor.fetchone()
-
-        if result:
-            return result["standardized_name"]
-        return original_name
-
-    def get_all_fund_mappings(self) -> dict[str, str]:
-        """
-        Get all fund name mappings.
-
-        Returns:
-            Dictionary mapping original names to standardized names.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT original_name, standardized_name FROM fund_name_mapping
-            ORDER BY original_name
-        """)
-        return {row["original_name"]: row["standardized_name"] for row in cursor.fetchall()}
-
-    def clear_fund_mappings(self) -> int:
-        """
-        Delete all fund name mappings from the database.
-
-        Returns:
-            Number of deleted mappings.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM fund_name_mapping")
-        deleted = cursor.rowcount
-        self.conn.commit()
-        logger.warning(f"Deleted {deleted} fund name mappings from database")
-        return deleted
 
     def exclude_fund(self, fund_name: str) -> None:
         """

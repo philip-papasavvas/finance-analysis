@@ -128,13 +128,30 @@ def standardize_fund_names(db_path: str = "portfolio.db", dry_run: bool = True) 
 
 def populate_fund_mappings(db_path: str = "portfolio.db") -> None:
     """
-    Populate the fund_name_mapping table in the database.
+    DEPRECATED: This function is no longer used.
 
-    Creates mappings for all funds based on the standardization rules.
+    The fund_name_mapping table has been removed from the database schema.
+    Fund name mappings are now applied via:
+    - mappings/fund_rename_mapping.json
+    - transactions.mapped_fund_name column
+    - src/apply_fund_mapping.py
+
+    This function is kept for reference but will raise a DeprecationWarning.
 
     Args:
         db_path: Path to the SQLite database.
     """
+    import warnings
+    warnings.warn(
+        "populate_fund_mappings() is deprecated. The fund_name_mapping table has been removed. "
+        "Use src/apply_fund_mapping.py instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    logger.warning("DEPRECATED: populate_fund_mappings() - fund_name_mapping table no longer exists")
+    return  # Early return - do not execute
+
+    # Original code below (kept for reference, but unreachable)
     db = TransactionDatabase(db_path)
 
     # Get all unique fund names from transactions
@@ -213,11 +230,9 @@ if __name__ == "__main__":
         print("="*80)
         standardize_fund_names(dry_run=False)
 
-        # Populate the mapping table
-        print("\n" + "="*80)
-        print("STEP 3: Populating fund name mapping table...")
-        print("="*80)
-        populate_fund_mappings()
+        # NOTE: populate_fund_mappings() is deprecated and skipped
+        # The fund_name_mapping table has been removed from the schema.
+        # Use src/apply_fund_mapping.py for fund name mappings instead.
 
         # Show summary
         show_standardized_summary()

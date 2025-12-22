@@ -1,6 +1,6 @@
 # Portfolio Fund Viewer
 
-A Python web application for analysing investment portfolio transactions from UK trading platforms (Fidelity and Interactive Investor). Built with Streamlit and SQLite for interactive fund tracking and visualization.
+A Python web application for analysing investment portfolio transactions from UK trading platforms (Fidelity, Interactive Investor, and InvestEngine). Built with Streamlit and SQLite for interactive fund tracking and visualization.
 
 ## Overview
 
@@ -15,11 +15,14 @@ Portfolio Fund Viewer loads transaction history CSV files from multiple platform
 ## Features
 
 - **Interactive Streamlit Dashboard**: Two-tab interface with Portfolio Overview and Fund Breakdown
-- **Multi-platform support**: Fidelity and Interactive Investor CSV formats
+- **Multi-platform support**: Fidelity, Interactive Investor, and InvestEngine CSV formats
 - **Tax wrapper awareness**: ISA, SIPP, and GIA support
 - **Fund name mapping**: Map original fund names to standardized display names via JSON configuration
+- **Price history**: Download and store daily price data from Yahoo Finance (yfinance)
+- **Fund-to-ticker mapping**: Link funds to tickers for price charts and valuations
 - **Fund exclusion**: Mark specific funds as excluded from portfolio view
-- **SQLite database**: Persistent storage with transaction history and mappings
+- **Database validation**: Built-in script to check data integrity
+- **SQLite database**: Persistent storage with transaction history, price data, and mappings
 - **Interactive charts**: Plotly-based buy/sell timeline and cumulative units charts
 - **Type hints**: Full type annotation throughout
 - **Logging**: Configurable logging for debugging and monitoring
@@ -34,6 +37,7 @@ scipy>=1.10.0
 pyyaml>=6.0
 streamlit>=1.28.0
 plotly>=5.17.0
+yfinance>=0.2.0
 ```
 
 ### Setup
@@ -56,22 +60,54 @@ pip install pandas scipy pyyaml streamlit plotly
 ```
 finance-analysis/
 ├── src/
-│   ├── database.py              # SQLite database manager
-│   ├── loaders.py               # Platform-specific CSV parsers
-│   ├── standardize_fund_names.py # Fund name standardization
+│   ├── database.py               # SQLite database manager (core CRUD operations)
+│   ├── models.py                 # Data models (Transaction, Platform, TaxWrapper enums)
+│   ├── loaders.py                # Platform-specific CSV parsers (Fidelity, II, InvestEngine)
+│   ├── load_transactions.py      # Main transaction loading script
+│   ├── apply_fund_mapping.py     # Apply JSON fund name mappings to transactions
+│   ├── download_ticker_data.py   # Download price data from Yahoo Finance
+│   ├── validate_database.py      # Database integrity validation script
+│   ├── migrate_ticker_mappings.py # Migration script for ticker mappings
+│   ├── standardize_fund_names.py # Fund name standardization (deprecated)
 │   ├── exclude_funds.py          # Fund exclusion utilities
 │   ├── migrate_db.py             # Database migration script
-│   └── apply_fund_mapping.py     # Apply JSON fund name mappings
+│   ├── calculators.py            # Return/performance calculation utilities
+│   ├── config.py                 # Configuration loading
+│   ├── utils.py                  # Utility functions
+│   ├── reports.py                # Report generation utilities
+│   └── query_database.py         # Database query utilities
 ├── app/
 │   └── portfolio_viewer.py       # Streamlit web dashboard
 ├── mappings/
-│   └── fund_rename_mapping.json  # Fund name mappings configuration
+│   ├── fund_rename_mapping.json  # Fund name mappings (original → display name)
+│   └── fund_ticker_mapping.json  # Fund to ticker symbol mappings
 ├── data/
-│   ├── fidelity/                 # Fidelity CSV files
-│   └── interactive_investor/     # Interactive Investor CSV files
+│   ├── fidelity_*.csv            # Fidelity transaction CSVs
+│   ├── ii_*.csv                  # Interactive Investor transaction CSVs
+│   └── invest_engine_*.csv       # InvestEngine trading statement CSVs
 ├── portfolio.db                  # SQLite database file
+├── DATABASE_SCHEMA.md            # Database schema documentation
+├── todo.md                       # Project task tracking
 └── README.md
 ```
+
+### Source Files (`src/`)
+
+| File | Purpose |
+|------|---------|
+| `database.py` | Core database class with CRUD operations for transactions, prices, and mappings |
+| `models.py` | Data models: `Transaction`, `Platform`, `TaxWrapper`, `TransactionType` enums |
+| `loaders.py` | CSV parsers for each platform (FidelityLoader, InteractiveInvestorLoader, InvestEngineLoader) |
+| `load_transactions.py` | Main script to load all CSV files into the database |
+| `apply_fund_mapping.py` | Applies fund_rename_mapping.json to update transactions.mapped_fund_name |
+| `download_ticker_data.py` | Downloads historical prices from yfinance and stores in price_history |
+| `validate_database.py` | Checks for orphaned funds, duplicate prices, missing data, etc. |
+| `migrate_ticker_mappings.py` | Creates mapping_status table and populates date ranges |
+| `standardize_fund_names.py` | Legacy script for fund name standardization (deprecated) |
+| `exclude_funds.py` | Mark funds as excluded from portfolio views |
+| `calculators.py` | XIRR and performance calculation functions |
+| `config.py` | YAML configuration loader |
+| `reports.py` | Transaction report generation (CSV, Markdown, DataFrame) |
 
 ## Quick Start
 
@@ -137,6 +173,31 @@ The app will open at `http://localhost:8501` with two tabs:
 
 - **Portfolio Overview**: View all funds with transaction counts
 - **Fund Breakdown**: Select individual funds to analyze with charts and transaction details
+
+### 5. Download Price Data (Optional)
+
+Download historical price data from Yahoo Finance for mapped tickers:
+
+```bash
+python src/download_ticker_data.py
+```
+
+This downloads daily closing prices and stores them in the `price_history` table.
+
+### 6. Validate Database (Optional)
+
+Run the validation script to check for data integrity issues:
+
+```bash
+python src/validate_database.py
+```
+
+The validator checks for:
+- Orphaned funds (transactions without ticker mappings)
+- Date range mismatches in mapping_status
+- Duplicate price records
+- Missing price data for transaction dates
+- Ticker consistency across tables
 
 ### Running the Database Migration
 
@@ -225,6 +286,7 @@ class CashFlow:
 class Platform(Enum):
     FIDELITY
     INTERACTIVE_INVESTOR
+    INVEST_ENGINE
 
 class TaxWrapper(Enum):
     ISA
@@ -244,19 +306,37 @@ class TransactionType(Enum):
     OTHER
 ```
 
+## Database Schema
+
+The SQLite database (`portfolio.db`) contains the following tables:
+
+| Table | Purpose |
+|-------|---------|
+| `transactions` | Core buy/sell transaction data from trading platforms |
+| `price_history` | Daily closing prices for tickers (from yfinance) |
+| `fund_ticker_mapping` | Maps fund names to ticker symbols for price lookup |
+| `mapping_status` | Tracks earliest/latest transaction dates per ticker |
+
+For detailed schema documentation, see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
 ## Data Directory Structure
 
-Organise your CSV files as follows:
+Place your CSV files in the `data/` directory:
 
 ```
 data/
-├── fidelity/
-│   ├── TransactionHistory.csv
-│   └── TransactionHistory_1.csv
-└── interactive_investor/
-    ├── ii_isa_2020_2022.csv
-    └── ii_isa_2022_2024.csv
+├── fidelity_transactions_1.csv          # Fidelity transaction history
+├── fidelity_transactions_2.csv
+├── ii_isa_20180301_20200301.csv         # Interactive Investor exports
+├── ii_isa_20200301_20220301.csv
+├── invest_engine_isa_trading_statement.csv  # InvestEngine trading statements
+└── invest_engine_gia_trading_statement.csv
 ```
+
+File naming conventions:
+- **Fidelity**: `fidelity*.csv` or `fidelity-transactions*.csv`
+- **Interactive Investor**: `ii_*.csv`
+- **InvestEngine**: `invest_engine_*.csv`
 
 ## Exporting Data
 
