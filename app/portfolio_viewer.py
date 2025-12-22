@@ -658,15 +658,13 @@ def main():
         st.subheader("📋 Detailed Holdings")
 
         # Tax wrapper filter checkboxes
-        col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
+        col_filter1, col_filter2, col_filter3 = st.columns(3)
         with col_filter1:
             show_isa = st.checkbox("🔵 ISA", value=True, key="show_isa")
         with col_filter2:
             show_sipp = st.checkbox("🟢 SIPP", value=True, key="show_sipp")
         with col_filter3:
             show_gia = st.checkbox("🟠 GIA", value=True, key="show_gia")
-        with col_filter4:
-            show_other = st.checkbox("🔴 OTHER", value=True, key="show_other")
 
         # Filter holdings based on selected tax wrappers
         filtered_df = holdings_df.copy()
@@ -677,8 +675,6 @@ def main():
             wrapper_filters.append('SIPP')
         if show_gia:
             wrapper_filters.append('GIA')
-        if show_other:
-            wrapper_filters.append('OTHER')
 
         if wrapper_filters:
             filtered_df = filtered_df[filtered_df['tax_wrapper'].isin(wrapper_filters)]
@@ -747,9 +743,9 @@ def main():
                     ),
                     "Current Value": st.column_config.NumberColumn(
                         "Current Value",
-                        format="£%,.2f",
+                        format="%.2f",
                         width="medium",
-                        help="Current market value of this holding"
+                        help="Current market value of this holding (£)"
                     ),
                     "% of Portfolio": st.column_config.ProgressColumn(
                         "% of Portfolio",
