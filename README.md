@@ -73,13 +73,18 @@ yfinance>=0.2.0
 git clone <repository-url>
 cd finance-analysis
 
-# Create virtual environment (optional)
-python -m venv venv
-source venv/bin/activate
+# Create virtual environment with uv (recommended)
+uv venv
 
-# Install dependencies
-pip install pandas scipy pyyaml streamlit plotly
+# Activate virtual environment
+source .venv/bin/activate  # On macOS/Linux
+# .venv\Scripts\activate   # On Windows
+
+# Install package and dependencies
+uv pip install -e .
 ```
+
+**Note:** This project uses [uv](https://github.com/astral-sh/uv) for fast, reliable package management. All dependencies are defined in `pyproject.toml`.
 
 ## Project Structure
 
@@ -115,23 +120,6 @@ finance-analysis/
 └── README.md
 ```
 
-### Source Files (`src/`)
-
-| File | Purpose |
-|------|---------|
-| `database.py` | Core database class with CRUD operations for transactions, prices, and mappings |
-| `models.py` | Data models: `Transaction`, `Platform`, `TaxWrapper`, `TransactionType` enums |
-| `loaders.py` | CSV parsers for each platform (FidelityLoader, InteractiveInvestorLoader, InvestEngineLoader) |
-| `load_transactions.py` | Main script to load all CSV files into the database |
-| `apply_fund_mapping.py` | Applies fund_rename_mapping.json to update transactions.mapped_fund_name |
-| `download_ticker_data.py` | Downloads historical prices from yfinance and stores in price_history |
-| `validate_database.py` | Checks for orphaned funds, duplicate prices, missing data, etc. |
-| `migrate_ticker_mappings.py` | Creates mapping_status table and populates date ranges |
-| `standardize_fund_names.py` | Legacy script for fund name standardization (deprecated) |
-| `exclude_funds.py` | Mark funds as excluded from portfolio views |
-| `calculators.py` | XIRR and performance calculation functions |
-| `config.py` | YAML configuration loader |
-| `reports.py` | Transaction report generation (CSV, Markdown, DataFrame) |
 
 ## Quick Start
 
