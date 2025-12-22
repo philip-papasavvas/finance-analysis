@@ -626,4 +626,11 @@ Examples:
 
 
 if __name__ == "__main__":
+    # Usage Examples:
+    #
+    #   python scripts/update_prices.py                           # Last 30 days
+    #   python scripts/update_prices.py --dry-run                 # Preview
+    #   python scripts/update_prices.py --backfill --min-date 2019-01-01
+    #   python scripts/update_prices.py --tickers SMT.L SUUS.L
+
     main()
