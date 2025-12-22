@@ -65,7 +65,7 @@ finance-analysis/
 │   ├── loaders.py                # Platform-specific CSV parsers (Fidelity, II, InvestEngine)
 │   ├── load_transactions.py      # Main transaction loading script
 │   ├── apply_fund_mapping.py     # Apply JSON fund name mappings to transactions
-│   ├── download_ticker_data.py   # Download price data from Yahoo Finance
+│   ├── download_ticker_data.py   # Download price data from Yahoo Finance (legacy)
 │   ├── validate_database.py      # Database integrity validation script
 │   ├── migrate_ticker_mappings.py # Migration script for ticker mappings
 │   ├── standardize_fund_names.py # Fund name standardization (deprecated)
@@ -76,6 +76,8 @@ finance-analysis/
 │   ├── utils.py                  # Utility functions
 │   ├── reports.py                # Report generation utilities
 │   └── query_database.py         # Database query utilities
+├── scripts/
+│   └── update_prices.py          # CLI tool for price updates (recommended)
 ├── app/
 │   └── portfolio_viewer.py       # Streamlit web dashboard
 ├── mappings/
@@ -87,6 +89,7 @@ finance-analysis/
 │   └── invest_engine_*.csv       # InvestEngine trading statement CSVs
 ├── portfolio.db                  # SQLite database file
 ├── DATABASE_SCHEMA.md            # Database schema documentation
+├── CLAUDE.md                     # Project context for Claude Code
 ├── todo.md                       # Project task tracking
 └── README.md
 ```
@@ -174,15 +177,28 @@ The app will open at `http://localhost:8501` with two tabs:
 - **Portfolio Overview**: View all funds with transaction counts
 - **Fund Breakdown**: Select individual funds to analyze with charts and transaction details
 
-### 5. Download Price Data (Optional)
+### 5. Update Price Data
 
-Download historical price data from Yahoo Finance for mapped tickers:
+Use the price update script to download/update historical prices:
 
 ```bash
-python src/download_ticker_data.py
+# Update all tickers for the last 30 days
+python scripts/update_prices.py
+
+# Update specific date range
+python scripts/update_prices.py --min-date 2024-01-01 --max-date 2024-12-31
+
+# Update specific tickers only
+python scripts/update_prices.py --tickers SUUS.L SMT.L
+
+# Full historical backfill
+python scripts/update_prices.py --backfill --min-date 2019-01-01
+
+# Preview changes without committing (dry run)
+python scripts/update_prices.py --dry-run
 ```
 
-This downloads daily closing prices and stores them in the `price_history` table.
+This downloads daily closing prices from Yahoo Finance and stores them in the `price_history` table.
 
 ### 6. Validate Database (Optional)
 

@@ -18,8 +18,8 @@ This is a **Portfolio Fund Viewer** - a Python application for analysing investm
 | `src/loaders.py` | Platform-specific CSV parsers |
 | `src/load_transactions.py` | Main transaction loading script |
 | `src/apply_fund_mapping.py` | Applies fund name mappings from JSON |
-| `src/download_ticker_data.py` | Downloads prices from yfinance |
 | `src/validate_database.py` | Database integrity validation |
+| `scripts/update_prices.py` | **CLI tool for price updates** (date ranges, backfill, dry-run) |
 | `app/portfolio_viewer.py` | Streamlit web dashboard |
 | `mappings/fund_rename_mapping.json` | Fund name standardization mappings |
 | `DATABASE_SCHEMA.md` | Full database schema documentation |
@@ -43,7 +43,13 @@ python src/load_transactions.py
 # Apply fund name mappings
 python src/apply_fund_mapping.py
 
-# Download price data
+# Update price data (recommended - has CLI options)
+python scripts/update_prices.py                    # Last 30 days, all tickers
+python scripts/update_prices.py --dry-run          # Preview without changes
+python scripts/update_prices.py --backfill --min-date 2019-01-01  # Full backfill
+python scripts/update_prices.py --tickers SMT.L    # Specific ticker
+
+# Legacy price download (simpler, fewer options)
 python src/download_ticker_data.py
 
 # Validate database integrity

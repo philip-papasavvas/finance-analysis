@@ -1,26 +1,26 @@
 # Portfolio Viewer - To-Do List
 
 ## 1. Price Data Management Script
-### 1.1 Create Dynamic Price Update Script
-- [ ] Design script that accepts minimum and maximum date parameters
-- [ ] Implement logic to detect missing price data within date range
-- [ ] Fetch missing price data from yfinance for all tickers/ISINs
-- [ ] Handle API rate limiting and retries
-- [ ] Insert/update missing data into price_history table
-- [ ] Add logging to track which tickers were updated and date ranges
+### 1.1 Create Dynamic Price Update Script ✓
+- [x] Design script that accepts minimum and maximum date parameters
+- [x] Implement logic to detect missing price data within date range
+- [x] Fetch missing price data from yfinance for all tickers/ISINs
+- [x] Handle API rate limiting and retries
+- [x] Insert/update missing data into price_history table
+- [x] Add logging to track which tickers were updated and date ranges
 
-### 1.2 Implement One-Off Backfill Capability
-- [ ] Create separate function for historical data backfill
-- [ ] Allow bulk import of historical prices for date ranges
-- [ ] Add progress indicators for long-running operations
-- [ ] Validate data before insertion (no duplicates, valid prices)
-- [ ] Generate report of successfully imported vs failed tickers
+### 1.2 Implement One-Off Backfill Capability ✓
+- [x] Create separate function for historical data backfill
+- [x] Allow bulk import of historical prices for date ranges
+- [x] Add progress indicators for long-running operations
+- [x] Validate data before insertion (no duplicates, valid prices)
+- [x] Generate report of successfully imported vs failed tickers
 
-### 1.3 Script Entry Point
-- [ ] Create CLI interface (e.g., `python scripts/update_prices.py --min-date 2020-01-01 --max-date 2025-12-31`)
-- [ ] Add dry-run mode to preview changes without committing
-- [ ] Support updating specific tickers vs all tickers
-- [ ] Add scheduling support (cron job ready)
+### 1.3 Script Entry Point ✓
+- [x] Create CLI interface (e.g., `python scripts/update_prices.py --min-date 2020-01-01 --max-date 2025-12-31`)
+- [x] Add dry-run mode to preview changes without committing
+- [x] Support updating specific tickers vs all tickers
+- [x] Add scheduling support (cron job ready - script exits with 0/1 for success/failure)
 
 ---
 
