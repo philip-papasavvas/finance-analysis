@@ -12,37 +12,46 @@ Portfolio Fund Viewer loads transaction history CSV files from multiple platform
 - Excluding funds from the portfolio view
 - Exporting transaction data to CSV
 
-## Current Development
+## Recent Updates
 
-### Dashboard Redesign - Current Holdings Focus
+### Dashboard Redesign - ✅ COMPLETED (2025-12-22)
 
-**In Progress**: Redesigning the Streamlit dashboard to focus on current holdings and VIP funds.
+The Streamlit dashboard has been redesigned with a new Current Holdings landing page:
 
-**Todo List:**
-1. ⏳ **User to share current holdings** (fund name/ticker + units held)
-2. ⏳ **Create Current Holdings landing page component**
-3. ⏳ **Calculate current values** using latest prices from price_history
-4. ⏳ **Add total portfolio value and breakdown visualizations**
-5. ⏳ **Add VIP-only filter toggle** to fund breakdown page
-6. ⏳ **Set Current Holdings as default landing page**
+**Completed:**
+1. ✅ **Current holdings data** stored in `data/current_holdings.json` (manually maintained)
+2. ✅ **Current Holdings landing page** with total portfolio value and metrics
+3. ✅ **Current value calculations** using latest prices from price_history
+4. ✅ **Portfolio visualizations** - horizontal stacked bar chart and detailed table
+5. ✅ **Tax wrapper filtering** - ISA/SIPP/GIA checkboxes for table filtering
+6. ✅ **Set as default landing page** - Current Holdings is now Tab 1
+
+### Other Recent Completions
+- ✅ **DODL transaction support** - Manual JSON loader for platforms without CSV exports
+- ✅ **VIP fund flagging system** - Priority tickers marked with `vip=1` in fund_ticker_mapping
+- ✅ **Package reorganization** - Code moved to `portfolio/` package structure
+- ✅ **Database schema cleanup** - Removed unused fund_name_mapping table
+- ✅ **Price update CLI tool** - `scripts/update_prices.py` with advanced options
 
 ---
 
 ## Features
 
-- **Interactive Streamlit Dashboard**: Two-tab interface with Portfolio Overview and Fund Breakdown
-- **Multi-platform support**: Fidelity, Interactive Investor, InvestEngine, and DODL CSV formats
-- **Tax wrapper awareness**: ISA, SIPP, and GIA support
+- **Interactive Streamlit Dashboard**: 5-tab interface with Current Holdings landing page, Funds List, Transaction History, Price History, and Mapping Status
+- **Current Holdings View**: Real-time portfolio valuation with tax wrapper filtering and allocation visualization
+- **Multi-platform support**: Fidelity, Interactive Investor, InvestEngine, and DODL (manual JSON entry)
+- **Tax wrapper awareness**: ISA, SIPP, and GIA support with color-coded display
 - **Fund name mapping**: Map original fund names to standardized display names via JSON configuration
 - **Price history**: Download and store daily price data from Yahoo Finance (yfinance)
 - **Fund-to-ticker mapping**: Link funds to tickers for price charts and valuations
-- **VIP fund flagging**: Mark priority tickers for easier tracking
+- **VIP fund flagging**: Mark priority tickers (`vip=1`) for Current Holdings focus
 - **Fund exclusion**: Mark specific funds as excluded from portfolio view
 - **Database validation**: Built-in script to check data integrity
 - **SQLite database**: Persistent storage with transaction history, price data, and mappings
-- **Interactive charts**: Plotly-based buy/sell timeline and cumulative units charts
+- **Interactive charts**: Plotly-based buy/sell timeline, cumulative units, and price history charts
 - **Type hints**: Full type annotation throughout
 - **Logging**: Configurable logging for debugging and monitoring
+- **Package management**: Uses `uv` for fast, reliable dependency management
 
 ## Installation
 
@@ -76,31 +85,26 @@ pip install pandas scipy pyyaml streamlit plotly
 
 ```
 finance-analysis/
-├── portfolio/
-│   ├── core/               # SQLite database manager (core CRUD operations)
-│   ├── models.py                 # Data models (Transaction, Platform, TaxWrapper enums)
-│   ├── loaders.py                # Platform-specific CSV parsers (Fidelity, II, InvestEngine)
+├── portfolio/                    # Main package
+│   ├── core/
+│   │   └── database.py           # Core database class with CRUD operations
+│   ├── loaders/                  # Platform-specific CSV parsers
+│   └── utils/                    # Utility functions
+├── src/                          # Legacy scripts (being migrated)
 │   ├── load_transactions.py      # Main transaction loading script
-│   ├── apply_fund_mapping.py     # Apply JSON fund name mappings to transactions
-│   ├── download_ticker_data.py   # Download price data from Yahoo Finance (legacy)
-│   ├── validate_database.py      # Database integrity validation script
-│   ├── migrate_ticker_mappings.py # Migration script for ticker mappings
-│   ├── standardize_fund_names.py # Fund name standardization (deprecated)
-│   ├── exclude_funds.py          # Fund exclusion utilities
-│   ├── migrate_db.py             # Database migration script
-│   ├── calculators.py            # Return/performance calculation utilities
-│   ├── config.py                 # Configuration loading
-│   ├── utils.py                  # Utility functions
-│   ├── reports.py                # Report generation utilities
-│   └── query_database.py         # Database query utilities
-├── &
+│   ├── load_dodl_transactions.py # DODL transaction loader from JSON
+│   ├── apply_fund_mapping.py     # Apply JSON fund name mappings
+│   ├── download_ticker_data.py   # Download price data (legacy)
+│   └── validate_database.py      # Database integrity validation
+├── scripts/
 │   └── update_prices.py          # CLI tool for price updates (recommended)
 ├── app/
-│   └── portfolio_viewer.py       # Streamlit web dashboard
+│   └── portfolio_viewer.py       # Streamlit web dashboard (5 tabs)
 ├── mappings/
-│   ├── fund_rename_mapping.json  # Fund name mappings (original → display name)
-│   └── fund_ticker_mapping.json  # Fund to ticker symbol mappings
+│   └── fund_rename_mapping.json  # Fund name mappings (original → display name)
 ├── data/
+│   ├── current_holdings.json     # Current holdings by ticker (manually maintained)
+│   ├── dodl_transactions.json    # DODL transactions for manual loading
 │   ├── fidelity_*.csv            # Fidelity transaction CSVs
 │   ├── ii_*.csv                  # Interactive Investor transaction CSVs
 │   └── invest_engine_*.csv       # InvestEngine trading statement CSVs
@@ -189,10 +193,13 @@ Start the Streamlit web application:
 streamlit run app/portfolio_viewer.py
 ```
 
-The app will open at `http://localhost:8501` with two tabs:
+The app will open at `http://localhost:8503` with 5 tabs:
 
-- **Portfolio Overview**: View all funds with transaction counts
-- **Fund Breakdown**: Select individual funds to analyze with charts and transaction details
+- **🏠 Current Holdings**: VIP funds with current values, breakdown charts, and filtering
+- **📊 Funds List**: View all funds with transaction counts
+- **🔍 Transaction History**: Select individual funds to analyze with charts and transaction details
+- **📈 Price History**: Historical price charts with buy/sell markers
+- **📋 Mapping Status**: Fund-to-ticker mapping overview
 
 ### 5. Update Price Data
 
@@ -200,19 +207,19 @@ Use the price update script to download/update historical prices:
 
 ```bash
 # Update all tickers for the last 30 days
-python &update_prices.py
+python scripts/update_prices.py
 
 # Update specific date range
-python &update_prices.py --min-date 2024-01-01 --max-date 2024-12-31
+python scripts/update_prices.py --min-date 2024-01-01 --max-date 2024-12-31
 
 # Update specific tickers only
-python &update_prices.py --tickers SUUS.L SMT.L
+python scripts/update_prices.py --tickers SUUS.L SMT.L
 
 # Full historical backfill
-python &update_prices.py --backfill --min-date 2019-01-01
+python scripts/update_prices.py --backfill --min-date 2019-01-01
 
 # Preview changes without committing (dry run)
-python &update_prices.py --dry-run
+python scripts/update_prices.py --dry-run
 ```
 
 This downloads daily closing prices from Yahoo Finance and stores them in the `price_history` table.
