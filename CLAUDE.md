@@ -9,18 +9,22 @@ This is a **Portfolio Fund Viewer** - a Python application for analysing investm
 - **Fidelity** - Transaction history CSVs
 - **Interactive Investor** - ISA/SIPP transaction exports
 - **InvestEngine** - Trading statement CSVs (GIA and ISA)
+- **DODL** - Manual JSON entry (no CSV export available)
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/database.py` | Core database class - all CRUD operations |
-| `src/loaders.py` | Platform-specific CSV parsers |
+| `portfolio/core/database.py` | Core database class - all CRUD operations |
+| `portfolio/loaders/` | Platform-specific CSV parsers (Fidelity, II, InvestEngine) |
 | `src/load_transactions.py` | Main transaction loading script |
+| `src/load_dodl_transactions.py` | DODL transaction loader from JSON |
 | `src/apply_fund_mapping.py` | Applies fund name mappings from JSON |
 | `src/validate_database.py` | Database integrity validation |
 | `scripts/update_prices.py` | **CLI tool for price updates** (date ranges, backfill, dry-run) |
-| `app/portfolio_viewer.py` | Streamlit web dashboard |
+| `app/portfolio_viewer.py` | **Streamlit web dashboard** with Current Holdings landing page |
+| `data/current_holdings.json` | Current holdings by ticker (manually maintained) |
+| `data/dodl_transactions.json` | DODL transactions for manual loading |
 | `mappings/fund_rename_mapping.json` | Fund name standardization mappings |
 | `DATABASE_SCHEMA.md` | Full database schema documentation |
 
@@ -29,8 +33,10 @@ This is a **Portfolio Fund Viewer** - a Python application for analysing investm
 SQLite database at `portfolio.db` with tables:
 - `transactions` - Core transaction data
 - `price_history` - Daily closing prices (from yfinance)
-- `fund_ticker_mapping` - Links fund names to tickers
+- `fund_ticker_mapping` - Links fund names to tickers (includes `vip` flag for priority funds)
 - `mapping_status` - Transaction date ranges per ticker
+
+**VIP Fund System**: Tickers marked with `vip=1` in `fund_ticker_mapping` appear on the Current Holdings landing page. This allows focusing on priority investments.
 
 See `DATABASE_SCHEMA.md` for full schema details.
 
@@ -39,6 +45,9 @@ See `DATABASE_SCHEMA.md` for full schema details.
 ```bash
 # Load transactions from CSV files
 python src/load_transactions.py
+
+# Load DODL transactions from JSON
+python src/load_dodl_transactions.py data/dodl_transactions.json
 
 # Apply fund name mappings
 python src/apply_fund_mapping.py
@@ -62,6 +71,31 @@ streamlit run app/portfolio_viewer.py
 sqlite3 portfolio.db
 ```
 
+## Dashboard Structure
+
+The Streamlit dashboard has 5 tabs:
+
+1. **Current Holdings** (Landing Page) - VIP funds overview
+   - Total portfolio value and fund count metrics
+   - Horizontal stacked bar chart showing holdings by fund and tax wrapper
+   - Detailed holdings table with filtering (ISA/SIPP/GIA checkboxes)
+   - Color-coded tax wrappers and progress bars for portfolio allocation
+   - Reads from `data/current_holdings.json` (manually maintained)
+
+2. **Portfolio Overview** - Complete fund list with transaction counts
+
+3. **Fund Breakdown** - Detailed analysis of individual funds
+   - Transaction timeline and cumulative units charts
+   - Buy/sell metrics and full transaction history
+
+4. **Price History** - Price charts with buy/sell markers
+   - Yearly performance analysis
+   - Toggle for transaction overlays
+
+5. **Mapping Status** - Fund-to-ticker mapping overview
+   - Shows which funds have price history
+   - VIP flag indicators
+
 ## Code Style Preferences
 
 - **Deprecate rather than delete**: When removing functionality, add deprecation warnings and keep code for reference rather than deleting entirely
@@ -73,10 +107,12 @@ sqlite3 portfolio.db
 ## Data Flow
 
 1. **CSV Loading**: `load_transactions.py` → parses CSVs via loaders → inserts into `transactions` table
-2. **Fund Mapping**: `apply_fund_mapping.py` → reads `fund_rename_mapping.json` → updates `transactions.mapped_fund_name`
-3. **Ticker Mapping**: Manual entries in `fund_ticker_mapping` table link funds to price tickers
-4. **Price Download**: `download_ticker_data.py` → fetches from yfinance → stores in `price_history`
-5. **Validation**: `validate_database.py` → checks for orphans, duplicates, missing data
+2. **DODL Loading**: `load_dodl_transactions.py` → reads `data/dodl_transactions.json` → inserts into `transactions` table
+3. **Fund Mapping**: `apply_fund_mapping.py` → reads `fund_rename_mapping.json` → updates `transactions.mapped_fund_name`
+4. **Ticker Mapping**: Manual entries in `fund_ticker_mapping` table link funds to price tickers
+5. **Price Download**: `scripts/update_prices.py` → fetches from yfinance → stores in `price_history`
+6. **Current Holdings**: `data/current_holdings.json` (manually maintained) → dashboard reads for VIP fund display
+7. **Validation**: `validate_database.py` → checks for orphans, duplicates, missing data
 
 ## Task Tracking
 
@@ -86,9 +122,23 @@ Project tasks are tracked in `todo.md` with sections:
 3. Cloud Deployment
 4. Database Schema Cleanup (recently completed)
 
+## Package Structure
+
+The project uses a `portfolio` package with the following structure:
+- `portfolio/core/database.py` - Core TransactionDatabase class
+- `portfolio/loaders/` - Platform-specific CSV parsers
+- `portfolio/utils/` - Utility functions
+
+The package is installed in editable mode using `uv pip install -e .` (this project uses `uv` for package management).
+
 ## Notes
 
-- The `fund_name_mapping` table was **removed** (2025-12-22) - it was unused
-- Fund name mappings now live in `mappings/fund_rename_mapping.json` and are applied to `transactions.mapped_fund_name`
+- **Package structure** (2025-12-22): Code reorganized into `portfolio` package; `pyproject.toml` updated to properly include the package
+- **Database cleanup** (2025-12-22): The `fund_name_mapping` table was removed - it was unused
+- **Current Holdings**: New landing page displays VIP funds from `data/current_holdings.json` (manually maintained with ticker, units, platform, tax wrapper)
+- **DODL support**: Added manual JSON loader for DODL transactions (platform doesn't provide CSV exports)
+- **VIP fund system**: Funds marked with `vip=1` in `fund_ticker_mapping` appear on the Current Holdings page
+- Fund name mappings live in `mappings/fund_rename_mapping.json` and are applied to `transactions.mapped_fund_name`
 - FDTEC ticker was replaced with LU1033663649 for Fidelity Global Tech
 - The project uses UK conventions (GBP, ISA/SIPP/GIA tax wrappers)
+- `current_holdings.json` format: Grouped by ticker with nested holdings array including tax_wrapper, platform, and units
