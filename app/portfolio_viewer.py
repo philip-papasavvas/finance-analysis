@@ -416,6 +416,7 @@ def get_fund_mapping_status() -> pd.DataFrame:
     - transaction_count: Number of transactions
     - ticker: Mapped ticker (if available)
     - has_price_history: Boolean indicating if price history exists
+    - vip: Boolean indicating if ticker is marked as VIP
     """
     db = TransactionDatabase("portfolio.db")
     cursor = db.conn.cursor()
@@ -442,6 +443,7 @@ def get_fund_mapping_status() -> pd.DataFrame:
 
         # Check if we have price history for this ticker
         has_price_history = False
+        vip = False
         if ticker:
             cursor.execute("""
                 SELECT COUNT(*) as count FROM price_history WHERE ticker = ?
@@ -449,16 +451,27 @@ def get_fund_mapping_status() -> pd.DataFrame:
             result = cursor.fetchone()
             has_price_history = result["count"] > 0 if result else False
 
+            # Check VIP status
+            cursor.execute("""
+                SELECT vip FROM fund_ticker_mapping WHERE ticker = ? LIMIT 1
+            """, (ticker,))
+            vip_result = cursor.fetchone()
+            vip = bool(vip_result["vip"]) if vip_result and vip_result["vip"] else False
+
         data.append({
             "fund_name": fund_name,
             "mapped_fund_name": mapped_fund_name if mapped_fund_name else "—",
             "transaction_count": transaction_count,
             "ticker": ticker if ticker else "—",
-            "has_price_history": has_price_history
+            "has_price_history": has_price_history,
+            "vip": vip
         })
 
     db.close()
-    return pd.DataFrame(data)
+    # Sort by VIP (descending) then by transaction count (descending)
+    df = pd.DataFrame(data)
+    df = df.sort_values(by=["vip", "transaction_count"], ascending=[False, False])
+    return df
 
 
 def main():
@@ -775,12 +788,18 @@ def main():
                 "mapped_fund_name": "Mapped Name",
                 "transaction_count": "Transactions",
                 "ticker": "Ticker",
-                "has_price_history": "Price History"
+                "has_price_history": "Price History",
+                "vip": "VIP"
             }, inplace=True)
 
             # Format the Price History column with emoji checkmarks/crosses
             display_df["Price History"] = display_df["Price History"].apply(
                 lambda x: "✅" if x else "❌"
+            )
+
+            # Format the VIP column with star emoji
+            display_df["VIP"] = display_df["VIP"].apply(
+                lambda x: "⭐" if x else ""
             )
 
             # Display summary stats
@@ -803,6 +822,7 @@ def main():
                 width='stretch',
                 hide_index=True,
                 column_config={
+                    "VIP": st.column_config.TextColumn("VIP", width="small"),
                     "Fund Name": st.column_config.TextColumn("Fund Name", width="large"),
                     "Mapped Name": st.column_config.TextColumn("Mapped Name", width="large"),
                     "Transactions": st.column_config.NumberColumn("Transactions", width="small"),
