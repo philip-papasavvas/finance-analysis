@@ -35,6 +35,110 @@ The Streamlit dashboard has been redesigned with a new Current Holdings landing 
 
 ---
 
+## Project Status & To-Do
+
+### ✅ Completed
+
+#### Database Schema Cleanup & Documentation (2025-12-22)
+- ✅ Removed unused `fund_name_mapping` table
+- ✅ Deleted FDTEC ticker entries (replaced with LU1033663649)
+- ✅ Created comprehensive DATABASE_SCHEMA.md documentation
+- ✅ Added inline docstrings to database methods
+- ✅ Built validation script (`src/validate_database.py`)
+- ✅ Fixed Amundi ticker (MWOT.DE) and backfilled price data
+- ✅ Added ticker mappings: LU1033663649, SUUS.L, SMT.L
+
+#### Price Data Management
+- ✅ Created `scripts/update_prices.py` CLI tool with:
+  - Date range parameters (--min-date, --max-date)
+  - Backfill mode for historical imports
+  - Dry-run preview mode
+  - Ticker selection and rate limiting
+
+### 🔄 In Progress
+
+#### 1. Core Holdings Price & Transaction Verification
+**Priority: High**
+
+**1.1 Identify Important Holdings**
+- [ ] Define criteria for "important" holdings (e.g., > £X value, actively traded)
+- [ ] Generate list of priority tickers/ISINs
+- [ ] Create mapping of holdings to tickers/ISINs for easy reference
+
+**1.2 Verify Data Completeness**
+- [ ] Audit which important holdings have complete price history
+- [ ] Audit which important holdings have complete transaction records
+- [ ] Identify gaps in price data (missing date ranges)
+- [ ] Identify gaps in transaction data
+- [ ] Create coverage report showing completeness percentage
+
+**1.3 Priority Tickers/ISINs List**
+- [ ] Document complete list of priority tickers/ISINs with status
+- [ ] Create table showing:
+  - Ticker/ISIN
+  - Fund Name
+  - Has Price History (Yes/No, date range if yes)
+  - Has Transactions (Yes/No, count)
+  - Data Completeness %
+  - Status (Complete / Needs Update / Incomplete)
+
+### 📋 Planned
+
+#### 2. Cloud Deployment & Online Hosting
+**Priority: Medium**
+
+**2.1 Infrastructure Setup**
+- [ ] Choose cloud provider (AWS, Google Cloud, Azure, Heroku, etc.)
+- [ ] Set up cloud database (PostgreSQL, MySQL, or cloud SQLite equivalent)
+- [ ] Migrate SQLite database to cloud database
+- [ ] Set up secure database connection strings
+- [ ] Test data integrity after migration
+
+**2.2 Application Deployment**
+- [ ] Deploy Streamlit app to cloud (e.g., Streamlit Cloud, Heroku, Docker container)
+- [ ] Configure environment variables for cloud database
+- [ ] Test all tabs and functionality in cloud environment
+- [ ] Set up automated deployments (CI/CD pipeline)
+
+**2.3 Authentication & Authorization**
+- [ ] Implement user authentication (login system)
+- [ ] Set up user roles/permissions if multi-user access needed
+- [ ] Secure API endpoints and database access
+- [ ] Add rate limiting to prevent abuse
+- [ ] Implement password management (reset, change, etc.)
+
+**2.4 Security Hardening**
+- [ ] Enable HTTPS/SSL certificates
+- [ ] Set up firewall rules and network isolation
+- [ ] Configure database access controls
+- [ ] Enable audit logging for data access
+- [ ] Set up automated backups
+- [ ] Document security policies
+
+**2.5 Monitoring & Maintenance**
+- [ ] Set up application monitoring (uptime, errors, performance)
+- [ ] Configure alerts for critical issues
+- [ ] Set up database backup schedule (daily minimum)
+- [ ] Document disaster recovery procedures
+- [ ] Plan for regular security updates
+
+**2.6 Documentation**
+- [ ] Create deployment guide
+- [ ] Document cloud setup steps
+- [ ] Create user guide for accessing cloud version
+- [ ] Document backup/restore procedures
+- [ ] Create troubleshooting guide
+
+### 🔮 Future Considerations
+
+- [ ] Evaluate SQLAlchemy ORM migration for improved maintainability
+- [ ] Additional platform loaders (Hargreaves Lansdown, AJ Bell, Vanguard)
+- [ ] HTML/PDF report generation
+- [ ] Performance benchmarking against indices
+- [ ] Comprehensive unit test coverage
+
+---
+
 ## Features
 
 - **Interactive Streamlit Dashboard**: 5-tab interface with Current Holdings landing page, Funds List, Transaction History, Price History, and Mapping Status
@@ -116,8 +220,7 @@ finance-analysis/
 ├── portfolio.db                  # SQLite database file
 ├── DATABASE_SCHEMA.md            # Database schema documentation
 ├── CLAUDE.md                     # Project context for Claude Code
-├── todo.md                       # Project task tracking
-└── README.md
+└── README.md                     # Project documentation (includes task tracking)
 ```
 
 
