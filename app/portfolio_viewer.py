@@ -15,7 +15,11 @@ import streamlit as st
 
 from portfolio.core.database import TransactionDatabase
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 
@@ -483,8 +487,30 @@ def get_fund_mapping_status() -> pd.DataFrame:
     return df
 
 
+def get_gbp_usd_rate():
+    """Get current GBP/USD exchange rate using yfinance."""
+    import yfinance as yf
+    try:
+        # Fetch GBP/USD rate (inverted because we want USD to GBP)
+        rate_ticker = yf.Ticker("GBPUSD=X")
+        rate_data = rate_ticker.history(period="1d")
+        if not rate_data.empty:
+            gbp_usd = rate_data['Close'].iloc[-1]
+            # We want USD to GBP, so invert
+            usd_to_gbp = 1 / gbp_usd
+            return usd_to_gbp
+        else:
+            logger.warning("Could not fetch GBP/USD rate, using default 0.74")
+            return 0.74  # Fallback rate
+    except Exception as e:
+        logger.error(f"Error fetching exchange rate: {e}")
+        return 0.74  # Fallback rate
+
+
 def get_current_holdings_vip():
-    """Get current holdings from JSON file for VIP funds only, using mapped fund names."""
+    """Get current holdings from JSON file for VIP funds only, using mapped fund names.
+    Converts USD prices to GBP for consistency.
+    """
     import json
 
     db = TransactionDatabase("portfolio.db")
@@ -498,6 +524,13 @@ def get_current_holdings_vip():
     except FileNotFoundError:
         logger.error(f"Holdings file not found: {holdings_file}")
         return pd.DataFrame()
+
+    # Get current USD to GBP exchange rate
+    usd_to_gbp = get_gbp_usd_rate()
+    logger.info(f"Using USD to GBP exchange rate: {usd_to_gbp:.4f}")
+
+    # Define which tickers are in USD
+    usd_tickers = {'BRK-B', 'NVDA', 'AMZN'}
 
     # Get VIP ticker info with mapped names and prices
     cursor.execute("""
@@ -516,9 +549,20 @@ def get_current_holdings_vip():
 
     ticker_info = {}
     for row in cursor.fetchall():
-        ticker_info[row["ticker"]] = {
+        original_price = row["latest_price"] if row["latest_price"] else 0
+        ticker = row["ticker"]
+
+        # Convert USD prices to GBP
+        if ticker in usd_tickers:
+            gbp_price = original_price * usd_to_gbp
+        else:
+            gbp_price = original_price
+
+        ticker_info[ticker] = {
             'mapped_name': row["mapped_name"] if row["mapped_name"] else "Unknown",
-            'price': row["latest_price"] if row["latest_price"] else 0,
+            'price': gbp_price,  # Always in GBP now
+            'original_price': original_price,
+            'currency': 'USD' if ticker in usd_tickers else 'GBP',
             'price_date': row["price_date"]
         }
 
@@ -534,7 +578,7 @@ def get_current_holdings_vip():
         # Process each holding for this ticker
         for holding in ticker_data.get('holdings', []):
             units = holding.get('units', 0)
-            value = units * info['price']
+            value = units * info['price']  # Value is now always in GBP
 
             data.append({
                 "fund_name": info['mapped_name'],  # Use mapped name from database
@@ -542,8 +586,10 @@ def get_current_holdings_vip():
                 "platform": holding.get('platform'),
                 "ticker": ticker,
                 "units": units,
-                "price": info['price'],
-                "value": value,
+                "price": info['price'],  # GBP price
+                "original_price": info['original_price'],  # Original currency price
+                "currency": info['currency'],
+                "value": value,  # Value in GBP
                 "price_date": info['price_date']
             })
 
@@ -600,6 +646,36 @@ def main():
 
         st.divider()
 
+         # ---- Tax wrapper filter checkboxes (MOVED BEFORE CHART) ----
+        st.subheader("📋 Filter Holdings")
+
+        col_filter1, col_filter2, col_filter3 = st.columns(3)
+        with col_filter1:
+            show_isa = st.checkbox("🔵 ISA", value=True, key="show_isa")
+        with col_filter2:
+            show_sipp = st.checkbox("🟢 SIPP", value=True, key="show_sipp")
+        with col_filter3:
+            show_gia = st.checkbox("🟠 GIA", value=True, key="show_gia")
+
+        # Determine which tax wrappers to show
+        wrapper_filters = []
+        if show_isa:
+            wrapper_filters.append('ISA')
+        if show_sipp:
+            wrapper_filters.append('SIPP')
+        if show_gia:
+            wrapper_filters.append('GIA')
+
+        # Filter holdings based on selected tax wrappers
+        if wrapper_filters:
+            filtered_holdings_df = holdings_df[holdings_df['tax_wrapper'].isin(wrapper_filters)]
+        else:
+            filtered_holdings_df = pd.DataFrame()  # Empty if no filters selected
+
+        if filtered_holdings_df.empty:
+            st.warning("No holdings to display. Select at least one tax wrapper.")
+            return
+
         # ---- Holdings by Fund (Horizontal Stacked Bar Chart) ----
         st.subheader("📈 Holdings by Fund & Tax Wrapper")
 
@@ -611,18 +687,20 @@ def main():
             'OTHER': '#d62728'   # Red
         }
 
-        # Create stacked bar chart (funds on Y-axis, wrappers as stacked segments)
+        # Create stacked bar chart using filtered data
         fig = go.Figure()
 
-        # Get unique funds sorted by total value (ascending for chart display)
+        # Get unique funds from FILTERED data, sorted by total value (ascending for chart display)
         # Note: Plotly displays horizontal bars bottom-to-top, so ascending order puts largest at top
-        fund_totals = holdings_df.groupby('fund_name')['value'].sum().sort_values(ascending=True)
+        fund_totals = filtered_holdings_df.groupby('fund_name')['value'].sum().sort_values(ascending=True)
         funds = fund_totals.index.tolist()
-        wrappers = ['ISA', 'SIPP', 'GIA', 'OTHER']
 
-        # Add a trace for each tax wrapper
-        for wrapper in wrappers:
-            wrapper_data = holdings_df[holdings_df['tax_wrapper'] == wrapper]
+        # Only show wrappers that are selected
+        wrappers_to_show = wrapper_filters
+
+        # Add a trace for each selected tax wrapper
+        for wrapper in wrappers_to_show:
+            wrapper_data = filtered_holdings_df[filtered_holdings_df['tax_wrapper'] == wrapper]
             if not wrapper_data.empty:
                 # Create a list of values for each fund (0 if fund doesn't have this wrapper)
                 values = []
@@ -659,42 +737,53 @@ def main():
 
         st.plotly_chart(fig, use_container_width=True)
 
-        st.divider()
-
         # ---- Detailed Holdings Table ----
         st.subheader("📋 Detailed Holdings")
 
-        # Tax wrapper filter checkboxes
-        col_filter1, col_filter2, col_filter3 = st.columns(3)
-        with col_filter1:
-            show_isa = st.checkbox("🔵 ISA", value=True, key="show_isa")
-        with col_filter2:
-            show_sipp = st.checkbox("🟢 SIPP", value=True, key="show_sipp")
-        with col_filter3:
-            show_gia = st.checkbox("🟠 GIA", value=True, key="show_gia")
+        # Get unique platforms for filtering
+        all_platforms = sorted(filtered_holdings_df['platform'].unique())
 
-        # Filter holdings based on selected tax wrappers
-        filtered_df = holdings_df.copy()
-        wrapper_filters = []
-        if show_isa:
-            wrapper_filters.append('ISA')
-        if show_sipp:
-            wrapper_filters.append('SIPP')
-        if show_gia:
-            wrapper_filters.append('GIA')
+        # Platform filter checkboxes (horizontal multi-select)
+        st.write("**Filter by Platform:**")
+        platform_cols = st.columns(len(all_platforms) if len(all_platforms) <= 6 else 6)
+        selected_platforms = []
+        for idx, platform in enumerate(all_platforms):
+            col_idx = idx % 6
+            with platform_cols[col_idx]:
+                if st.checkbox(platform, value=True, key=f"platform_{platform}"):
+                    selected_platforms.append(platform)
 
-        if wrapper_filters:
-            filtered_df = filtered_df[filtered_df['tax_wrapper'].isin(wrapper_filters)]
+        # Apply platform filter
+        if selected_platforms:
+            table_filtered_df = filtered_holdings_df[filtered_holdings_df['platform'].isin(selected_platforms)]
         else:
-            filtered_df = pd.DataFrame()  # Empty if no filters selected
+            table_filtered_df = pd.DataFrame()
 
-        if not filtered_df.empty:
-            # Recalculate total for filtered holdings
-            filtered_total = filtered_df['value'].sum()
+        if table_filtered_df.empty:
+            st.warning("No holdings to display with current filters.")
+        else:
+            # Sort by value (descending) for display
+            table_filtered_df = table_filtered_df.sort_values(by='value', ascending=False)
 
-            # Create display dataframe with raw numeric values for formatting
-            display_df = filtered_df.copy()
-            display_df['pct_of_portfolio'] = (filtered_df['value'] / total_value * 100)
+            # Recalculate total for table filtered holdings
+            table_filtered_total = table_filtered_df['value'].sum()
+
+            # Create display dataframe with calculated percentages
+            display_df = table_filtered_df.copy()
+
+            # Calculate % of Total Holdings (for each fund across all wrappers/platforms)
+            fund_totals = holdings_df.groupby('fund_name')['value'].sum()
+            display_df['pct_of_fund'] = display_df.apply(
+                lambda row: (row['value'] / fund_totals.get(row['fund_name'], row['value'])) * 100,
+                axis=1
+            )
+
+            # Calculate % of Wrapper (within the same tax wrapper)
+            wrapper_totals = holdings_df.groupby('tax_wrapper')['value'].sum()
+            display_df['pct_of_wrapper'] = display_df.apply(
+                lambda row: (row['value'] / wrapper_totals.get(row['tax_wrapper'], row['value'])) * 100,
+                axis=1
+            )
 
             # Color code tax wrappers
             def color_tax_wrapper(wrapper):
@@ -708,12 +797,12 @@ def main():
 
             display_df['tax_wrapper_colored'] = display_df['tax_wrapper'].apply(color_tax_wrapper)
 
-            # Select and reorder columns for display (Tax Wrapper first, excluding ticker)
-            display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'units', 'price', 'value', 'pct_of_portfolio']]
-            display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Units', 'Latest Price', 'Current Value', '% of Portfolio']
+            # Select and reorder columns for Option B display
+            display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'units', 'price', 'value', 'pct_of_fund', 'pct_of_wrapper']]
+            display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Units', 'Latest Price (£)', 'Current Value (£)', '% of Fund', '% of Wrapper']
 
             # Show filtered total
-            st.info(f"Showing {len(display_df)} holdings | Total Value: £{filtered_total:,.2f}")
+            st.info(f"Showing {len(display_df)} holdings | Total Value: £{table_filtered_total:,.2f}")
 
             # Display table with increased width
             st.dataframe(
@@ -732,36 +821,43 @@ def main():
                     ),
                     "Platform": st.column_config.TextColumn(
                         "Platform",
-                        width="medium"
+                        width="small"
                     ),
                     "Units": st.column_config.NumberColumn(
                         "Units",
                         format="%.2f",
                         width="small"
                     ),
-                    "Latest Price": st.column_config.NumberColumn(
-                        "Latest Price",
+                    "Latest Price (£)": st.column_config.NumberColumn(
+                        "Latest Price (£)",
                         format="£%.2f",
-                        width="small"
+                        width="small",
+                        help="Current price in GBP (USD converted)"
                     ),
-                    "Current Value": st.column_config.NumberColumn(
-                        "Current Value",
-                        format="%.2f",
+                    "Current Value (£)": st.column_config.NumberColumn(
+                        "Current Value (£)",
+                        format="£%.0f",
                         width="medium",
-                        help="Current market value of this holding (£)"
+                        help="Current market value in GBP"
                     ),
-                    "% of Portfolio": st.column_config.ProgressColumn(
-                        "% of Portfolio",
+                    "% of Fund": st.column_config.ProgressColumn(
+                        "% of Fund",
                         format="%.1f%%",
                         min_value=0,
                         max_value=100,
-                        width="medium",
-                        help="Percentage of total VIP portfolio value"
+                        width="small",
+                        help="Percentage of total holdings for this fund across all wrappers"
+                    ),
+                    "% of Wrapper": st.column_config.ProgressColumn(
+                        "% of Wrapper",
+                        format="%.1f%%",
+                        min_value=0,
+                        max_value=100,
+                        width="small",
+                        help="Percentage of total holdings within this tax wrapper"
                     )
                 }
             )
-        else:
-            st.warning("No holdings to display with current filters")
 
     # ==================== TAB 2: FUNDS LIST ====================
     with tab2:
