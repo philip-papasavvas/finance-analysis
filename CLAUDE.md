@@ -98,11 +98,29 @@ The Streamlit dashboard has 5 tabs:
 
 ## Code Style Preferences
 
-- **Deprecate rather than delete**: When removing functionality, add deprecation warnings and keep code for reference rather than deleting entirely
-- **Comprehensive documentation**: Add docstrings explaining table purposes, not just what they contain
+### General Principles
+- **Separation of concerns**: Keep SQL queries in separate files (`sql.py`), not hardcoded in functions
+- **Modularity**: Break large files into smaller, focused modules (e.g., split 1,300+ line files into <300 line modules)
+- **Explicit user confirmation**: Always ask before making git commits or major structural changes
+- **Deprecate rather than delete**: When removing functionality, add deprecation warnings and keep code for reference
+- **Option B approach**: When cleaning up, prefer "remove + deprecate" over "keep as legacy" or "consolidate"
+
+### Code Organization
+- **Functional organization**: Organize by functionality (data/, charts/, tabs/) rather than technical layers
+- **Small, focused files**: Each file should have a single, clear purpose
+- **Clear module boundaries**: Use `__init__.py` with explicit `__all__` exports
+- **Constants for configuration**: Extract magic values into named constants (e.g., `WRAPPER_COLORS`, `TICKER_CURRENCY_MAP`)
+
+### Code Quality
+- **Type hints**: Use type hints for function parameters and return values (e.g., `-> pd.DataFrame`)
+- **Descriptive names**: Use clear, descriptive function names (e.g., `get_all_funds_from_db()`, `render_current_holdings_tab()`)
+- **Comprehensive docstrings**: Add docstrings explaining what functions do, not just what they contain
+- **Clean imports**: Organize imports logically (standard library, third-party, local)
+
+### Scripts & Tools
 - **CLI scripts with clear output**: Use logging with clear formatting (✓, ⊘, ✗ symbols)
 - **Standalone validation**: Prefer standalone CLI scripts over methods embedded in classes
-- **Option B approach**: When cleaning up, prefer "remove + deprecate" over "keep as legacy" or "consolidate"
+- **Interactive workflows**: For data entry, prefer interactive prompts with validation over manual file editing
 
 ## Data Flow
 
