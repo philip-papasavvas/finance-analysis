@@ -2,6 +2,61 @@
 
 A Python web application for analysing investment portfolio transactions from UK trading platforms (Fidelity, Interactive Investor, and InvestEngine). Built with Streamlit and SQLite for interactive fund tracking and visualization.
 
+## Quick Reference - Common Operations
+
+### View Portfolio Dashboard
+```bash
+streamlit run app/portfolio_viewer.py
+```
+
+### Add a New Transaction (Interactive)
+```bash
+python scripts/add_transaction.py
+```
+- Prompts for all transaction details (date, platform, fund, units, price, etc.)
+- Validates fund names against VIP holdings
+- Automatically updates **both** transaction database AND `data/current_holdings.json`
+- Shows updated holdings immediately
+
+### Load Transactions from CSV
+```bash
+# Load from platform CSV exports
+python src/load_transactions.py
+
+# Load DODL transactions from JSON
+python src/load_dodl_transactions.py data/dodl_transactions.json
+
+# Apply fund name mappings after loading
+python src/apply_fund_mapping.py
+```
+
+### Update Price Data
+```bash
+# Update last 30 days for all tickers
+python scripts/update_prices.py
+
+# Preview changes without updating (dry-run)
+python scripts/update_prices.py --dry-run
+
+# Full backfill from specific date
+python scripts/update_prices.py --backfill --min-date 2019-01-01
+
+# Update specific ticker only
+python scripts/update_prices.py --tickers NVDA
+```
+
+### Validate Database
+```bash
+python src/validate_database.py
+```
+
+### Verify VIP Holdings Data Completeness
+```bash
+python scripts/verify_vip_data_completeness.py
+```
+
+---
+
 ## Overview
 
 Portfolio Fund Viewer loads transaction history CSV files from multiple platforms, normalises them into a common format, and provides an interactive web dashboard for:
@@ -55,17 +110,18 @@ The Streamlit dashboard has been redesigned with a new Current Holdings landing 
   - Dry-run preview mode
   - Ticker selection and rate limiting
 
+#### Core Holdings Identification
+- ✅ Defined criteria for "important" holdings using VIP flag system
+- ✅ Generated list of priority tickers/ISINs (15 VIP holdings in `fund_ticker_mapping`)
+- ✅ Created mapping infrastructure with `fund_ticker_mapping` and `mapping_status` tables
+- ✅ Implemented `data/current_holdings.json` for manual holdings tracking
+
 ### 🔄 In Progress
 
-#### 1. Core Holdings Price & Transaction Verification
+#### 1. Core Holdings Data Completeness Verification
 **Priority: High**
 
-**1.1 Identify Important Holdings**
-- [ ] Define criteria for "important" holdings (e.g., > £X value, actively traded)
-- [ ] Generate list of priority tickers/ISINs
-- [ ] Create mapping of holdings to tickers/ISINs for easy reference
-
-**1.2 Verify Data Completeness**
+**1.1 Verify Data Completeness**
 - [ ] Audit which important holdings have complete price history
 - [ ] Audit which important holdings have complete transaction records
 - [ ] Identify gaps in price data (missing date ranges)
