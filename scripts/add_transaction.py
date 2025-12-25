@@ -302,7 +302,7 @@ class TransactionEntry:
             else:
                 print("⚠ Please enter 'yes' or 'no'")
 
-   def get_ticker_for_fund(self, fund_name: str) -> Optional[str]:
+    def get_ticker_for_fund(self, fund_name: str) -> Optional[str]:
         """Get ticker symbol for a fund name."""
         cursor = self.conn.cursor()
         cursor.execute("""
@@ -462,6 +462,9 @@ class TransactionEntry:
                     print("\n✓ Transaction added successfully!")
                     print(f"✓ Added {transaction['transaction_type']} of {transaction['units']:.4f} units")
                     print(f"✓ Total value: {transaction['currency']}{transaction['value']:,.2f}")
+
+                    # Update current holdings JSON
+                    self.update_current_holdings(transaction)
 
                     # Ask if user wants to add another
                     print("\n" + "="*80)
