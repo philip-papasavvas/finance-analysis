@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DATA_DIR = Path(__file__).parent.parent / 'data' / 'credit_card'
-CSV_FILE = DATA_DIR / 'transactions.csv'
+CSV_FILE = DATA_DIR / 'yonder_transactions_20250720_20251219.csv'
 
 
 @st.cache_data
@@ -139,6 +139,13 @@ def main():
     with row1_col1:
         st.subheader("Weekly Spending Trend")
         weekly_spend = filtered_df.groupby('Week_Start')[amount_col].sum().reset_index()
+
+        # Calculate average weekly spend
+        avg_weekly_spend = weekly_spend[amount_col].mean()
+
+        # Calculate 2-week rolling average
+        weekly_spend['Rolling_Avg_2W'] = weekly_spend[amount_col].rolling(window=2, min_periods=1).mean()
+
         fig_trend = px.line(
             weekly_spend,
             x='Week_Start',
@@ -146,7 +153,30 @@ def main():
             markers=True,
             title="Net Spend per Week"
         )
-        fig_trend.update_layout(xaxis_title="Week Commencing", yaxis_title="Spend (£)")
+
+        # Add 2-week rolling average line (dotted cyan/light blue)
+        fig_trend.add_scatter(
+            x=weekly_spend['Week_Start'],
+            y=weekly_spend['Rolling_Avg_2W'],
+            mode='lines',
+            name='2-Week Rolling Avg',
+            line=dict(color='cyan', dash='dot', width=2)
+        )
+
+        # Add dotted horizontal line for overall average
+        fig_trend.add_hline(
+            y=avg_weekly_spend,
+            line_dash="dot",
+            line_color="gray",
+            annotation_text=f"Overall Avg: £{avg_weekly_spend:,.2f}",
+            annotation_position="right"
+        )
+
+        fig_trend.update_layout(
+            xaxis_title="Week Commencing",
+            yaxis_title="Spend (£)",
+            showlegend=True
+        )
         st.plotly_chart(fig_trend, use_container_width=True)
 
     with row1_col2:
