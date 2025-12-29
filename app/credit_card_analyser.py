@@ -193,24 +193,12 @@ def main():
         # Calculate average weekly spend
         avg_weekly_spend = weekly_spend[amount_col].mean()
 
-        # Calculate 2-week rolling average
-        weekly_spend['Rolling_Avg_2W'] = weekly_spend[amount_col].rolling(window=2, min_periods=1).mean()
-
         fig_trend = px.line(
             weekly_spend,
             x='Week_Start',
             y=amount_col,
             markers=True,
             title="Net Spend per Week"
-        )
-
-        # Add 2-week rolling average line (dotted cyan/light blue)
-        fig_trend.add_scatter(
-            x=weekly_spend['Week_Start'],
-            y=weekly_spend['Rolling_Avg_2W'],
-            mode='lines',
-            name='2-Week Rolling Avg',
-            line=dict(color='cyan', dash='dot', width=2)
         )
 
         # Add dotted horizontal line for overall average
@@ -225,9 +213,9 @@ def main():
         fig_trend.update_layout(
             xaxis_title="Week Commencing",
             yaxis_title="Spend (£)",
-            showlegend=True
+            showlegend=False
         )
-        st.plotly_chart(fig_trend, use_container_width=True)
+        st.plotly_chart(fig_trend, width='stretch')
 
     with row1_col2:
         st.subheader("Category Breakdown")
@@ -238,7 +226,7 @@ def main():
             hole=0.4,
             title="Share of Wallet"
         )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width='stretch')
 
     # --- ROW 2: DETAILED ANALYSIS ---
     row2_col1, row2_col2 = st.columns(2)
@@ -249,7 +237,7 @@ def main():
         merchant_spend = merchant_spend.sort_values(by=amount_col, ascending=False).head(10)
         st.dataframe(
             merchant_spend.style.format({amount_col: "£{:.2f}"}),
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
 
@@ -265,7 +253,7 @@ def main():
                 color='Type',
                 title="Regular vs. Impulse Spending"
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width='stretch')
         else:
             st.info("No 'Type' column found in CSV.")
 
@@ -286,7 +274,7 @@ def main():
             'Original_Amount': "£{:.2f}",
             'Adjusted_Amount': "£{:.2f}"
         }).map(highlight_refunds, subset=['Adjusted_Amount']),
-        use_container_width=True
+        width='stretch'
     )
 
 
