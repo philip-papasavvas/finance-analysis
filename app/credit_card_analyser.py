@@ -228,6 +228,36 @@ def main():
         )
         st.plotly_chart(fig_pie, width='stretch')
 
+    st.markdown("---")
+
+    # --- MONTHLY BREAKDOWN BY CARD ---
+    st.subheader("Monthly Spending by Card Provider")
+
+    # Group by Month and Source
+    monthly_by_card = filtered_df.groupby(['Month', 'Source'])[amount_col].sum().reset_index()
+
+    # Create grouped bar chart (shows each card as separate bar)
+    fig_monthly = px.bar(
+        monthly_by_card,
+        x='Month',
+        y=amount_col,
+        color='Source',
+        title="Monthly Spend Breakdown by Card",
+        barmode='group',
+        text_auto='.2f'
+    )
+
+    fig_monthly.update_layout(
+        xaxis_title="Month",
+        yaxis_title="Spend (£)",
+        legend_title="Card Provider",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(fig_monthly, use_container_width=True)
+
+    st.markdown("---")
+
     # --- ROW 2: DETAILED ANALYSIS ---
     row2_col1, row2_col2 = st.columns(2)
 
