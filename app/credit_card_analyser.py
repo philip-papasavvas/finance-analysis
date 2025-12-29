@@ -1,8 +1,16 @@
 """
 Streamlit app for analyzing credit card spending from CSV exports.
 
-Supports Yonder transaction exports with categorization, trend analysis,
-and merchant breakdown. Provides filters for date ranges and categories.
+Automatically loads and combines transactions from all CSV files in the
+data/credit_card directory. Supports multiple card providers (Yonder, Chase,
+Monzo, etc.) with automatic format detection and normalization.
+
+Features:
+- Multi-card analysis with source filtering
+- Category and time-based filtering
+- Weekly spending trends with rolling averages
+- Top merchants and recurring vs one-off spend analysis
+- Detailed transaction table with refund highlighting
 """
 import logging
 from pathlib import Path
@@ -21,39 +29,69 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DATA_DIR = Path(__file__).parent.parent / 'data' / 'credit_card'
-CSV_FILE = DATA_DIR / 'yonder_transactions_20250720_20251219.csv'
 
 
 @st.cache_data
 def load_data():
     """
-    Load credit card transactions from CSV file with date parsing.
+    Load credit card transactions from all CSV files in the credit_card directory.
+
+    Automatically detects CSV format (single Amount column vs Original_Amount/Adjusted_Amount)
+    and normalizes to a consistent format. Derives card source from filename.
 
     Returns:
-        pd.DataFrame: Transaction data with parsed dates and derived fields,
-                     or empty DataFrame if file not found.
+        pd.DataFrame: Combined transaction data with parsed dates, derived fields,
+                     and 'Source' column indicating card provider.
     """
-    try:
-        # Load CSV
-        df = pd.read_csv(CSV_FILE)
+    dfs = []
+    csv_files = list(DATA_DIR.glob('*.csv'))
 
-        # Parse Dates (Handling the YYYY-MMM-DD format)
-        df['Date'] = pd.to_datetime(df['Date'], format='%Y-%b-%d')
-
-        # Extract Month-Year for filtering/grouping
-        df['Month'] = df['Date'].dt.strftime('%Y-%m')
-        df['Week_Start'] = df['Date'].dt.to_period('W').apply(lambda r: r.start_time)
-
-        logger.info(f"Loaded {len(df)} transactions from {CSV_FILE}")
-        return df
-    except FileNotFoundError:
-        logger.error(f"File not found: {CSV_FILE}")
-        st.error(f"❌ Transaction file not found: {CSV_FILE}")
+    if not csv_files:
+        st.error(f"❌ No CSV files found in {DATA_DIR}")
         return pd.DataFrame()
-    except Exception as e:
-        logger.error(f"Error loading data: {e}")
-        st.error(f"❌ Error loading data: {e}")
+
+    for csv_file in csv_files:
+        try:
+            # Extract card name from filename (e.g., "yonder_transactions_..." -> "Yonder")
+            card_name = csv_file.stem.split('_')[0].capitalize()
+
+            df = pd.read_csv(csv_file)
+            df['Source'] = card_name
+
+            # Parse dates
+            df['Date'] = pd.to_datetime(df['Date'], format='%Y-%b-%d')
+
+            # Normalize amount columns based on CSV format
+            if 'Amount' in df.columns:
+                # Single Amount column (e.g., Chase, Monzo) - duplicate to match Yonder format
+                df['Original_Amount'] = df['Amount']
+                df['Adjusted_Amount'] = df['Amount']
+                df = df.drop(columns=['Amount'])
+            elif 'Original_Amount' not in df.columns or 'Adjusted_Amount' not in df.columns:
+                logger.error(f"Skipping {csv_file.name}: Missing required amount columns")
+                st.warning(f"⚠️ Skipped {csv_file.name}: Invalid format")
+                continue
+
+            logger.info(f"Loaded {len(df)} transactions from {card_name} ({csv_file.name})")
+            dfs.append(df)
+
+        except Exception as e:
+            logger.error(f"Error loading {csv_file.name}: {e}")
+            st.error(f"❌ Error loading {csv_file.name}: {e}")
+
+    if not dfs:
+        st.error("❌ No valid transaction data found")
         return pd.DataFrame()
+
+    # Combine all sources
+    df = pd.concat(dfs, ignore_index=True)
+
+    # Extract Month-Year for filtering/grouping
+    df['Month'] = df['Date'].dt.strftime('%Y-%m')
+    df['Week_Start'] = df['Date'].dt.to_period('W').apply(lambda r: r.start_time)
+
+    logger.info(f"Combined total: {len(df)} transactions from {len(dfs)} sources")
+    return df
 
 
 def highlight_refunds(val):
@@ -66,13 +104,13 @@ def highlight_refunds(val):
     Returns:
         str: CSS color styling string
     """
-    color = 'red' if val < 0 else 'black'
+    color = 'red' if val < 0 else 'white'
     return f'color: {color}'
 
 
 def main():
     """Main Streamlit app for credit card spending analysis."""
-    st.set_page_config(page_title="Yonder Spend Analyzer", layout="wide")
+    st.set_page_config(page_title="Credit Card Spend Analyzer", layout="wide")
 
     # Load data
     df = load_data()
@@ -84,7 +122,15 @@ def main():
     # --- SIDEBAR FILTERS ---
     st.sidebar.header("Filter Transactions")
 
-    # 1. Choose Amount Type
+    # 1. Card Source Filter
+    all_sources = sorted(df['Source'].unique())
+    selected_sources = st.sidebar.multiselect(
+        "Card",
+        all_sources,
+        default=all_sources
+    )
+
+    # 2. Choose Amount Type
     amount_col = st.sidebar.radio(
         "Which amounts to analyze?",
         ('Adjusted_Amount', 'Original_Amount'),
@@ -92,7 +138,7 @@ def main():
         help="Adjusted removes split bills (Three Daggers) and reimbursable flights."
     )
 
-    # 2. Category Filter
+    # 3. Category Filter
     all_categories = sorted(df['Category'].unique())
     selected_categories = st.sidebar.multiselect(
         "Category",
@@ -100,20 +146,24 @@ def main():
         default=all_categories
     )
 
-    # 3. Month Filter
+    # 4. Month Filter
     all_months = sorted(df['Month'].unique())
     selected_months = st.sidebar.multiselect("Month", all_months, default=all_months)
 
     # Apply Filters
     filtered_df = df[
+        (df['Source'].isin(selected_sources)) &
         (df['Category'].isin(selected_categories)) &
         (df['Month'].isin(selected_months))
     ]
 
     # --- MAIN DASHBOARD ---
-    st.title("💳 Yonder Spending Insights")
+    st.title("💳 Credit Card Spending Insights")
+
+    # Show which cards are being analyzed
+    card_list = ', '.join(sorted(filtered_df['Source'].unique()))
     st.markdown(
-        f"Analyzing spending from **{filtered_df['Date'].min().date()}** to **{filtered_df['Date'].max().date()}**"
+        f"Analyzing **{card_list}** from **{filtered_df['Date'].min().date()}** to **{filtered_df['Date'].max().date()}**"
     )
 
     # --- TOP METRICS ---
@@ -227,7 +277,7 @@ def main():
 
     # Format the display dataframe for readability
     display_df = filtered_df[
-        ['Date', 'Description', 'Category', 'Original_Amount', 'Adjusted_Amount', 'Type', 'Notes']
+        ['Date', 'Source', 'Description', 'Category', 'Original_Amount', 'Adjusted_Amount', 'Type', 'Notes']
     ].copy()
     display_df['Date'] = display_df['Date'].dt.date
 
