@@ -70,6 +70,7 @@ def render_current_holdings_tab():
     st.divider()
 
     # ---- Tax wrapper filter checkboxes (horizontal) ----
+    st.write("**Filter by Tax Wrapper:**")
     col_filter1, col_filter2, col_filter3 = st.columns(3)
     with col_filter1:
         show_isa = st.checkbox("🔵 ISA", value=True, key="show_isa")
@@ -95,6 +96,27 @@ def render_current_holdings_tab():
 
     if filtered_holdings_df.empty:
         st.warning("No holdings to display. Select at least one tax wrapper.")
+        return
+
+    # ---- Platform filter checkboxes (horizontal) ----
+    st.write("**Filter by Platform:**")
+    all_platforms = sorted(filtered_holdings_df['platform'].unique())
+    platform_cols = st.columns(len(all_platforms) if len(all_platforms) <= 6 else 6)
+    selected_platforms = []
+    for idx, platform in enumerate(all_platforms):
+        col_idx = idx % 6
+        with platform_cols[col_idx]:
+            if st.checkbox(platform, value=True, key=f"platform_{platform}"):
+                selected_platforms.append(platform)
+
+    # Apply platform filter
+    if selected_platforms:
+        filtered_holdings_df = filtered_holdings_df[filtered_holdings_df['platform'].isin(selected_platforms)]
+    else:
+        filtered_holdings_df = pd.DataFrame()
+
+    if filtered_holdings_df.empty:
+        st.warning("No holdings to display with current filters.")
         return
 
     # ---- Holdings by Fund (Horizontal Stacked Bar Chart) ----
@@ -149,24 +171,8 @@ def render_current_holdings_tab():
     # ---- Detailed Holdings Table ----
     st.subheader("📋 Detailed Holdings")
 
-    # Get unique platforms for filtering
-    all_platforms = sorted(filtered_holdings_df['platform'].unique())
-
-    # Platform filter checkboxes (horizontal multi-select)
-    st.write("**Filter by Platform:**")
-    platform_cols = st.columns(len(all_platforms) if len(all_platforms) <= 6 else 6)
-    selected_platforms = []
-    for idx, platform in enumerate(all_platforms):
-        col_idx = idx % 6
-        with platform_cols[col_idx]:
-            if st.checkbox(platform, value=True, key=f"platform_{platform}"):
-                selected_platforms.append(platform)
-
-    # Apply platform filter
-    if selected_platforms:
-        table_filtered_df = filtered_holdings_df[filtered_holdings_df['platform'].isin(selected_platforms)]
-    else:
-        table_filtered_df = pd.DataFrame()
+    # Use filtered_holdings_df which already has platform filter applied
+    table_filtered_df = filtered_holdings_df.copy()
 
     if table_filtered_df.empty:
         st.warning("No holdings to display with current filters.")
@@ -232,7 +238,7 @@ def render_current_holdings_tab():
                     "Latest Price (£)",
                     format="£%.2f",
                     width="small",
-                    help="Current price in GBP (USD converted)"
+                    help="Current price in GBP (USD/EUR converted)"
                 ),
                 "Current Value (£)": st.column_config.NumberColumn(
                     "Current Value (£)",
