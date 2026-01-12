@@ -207,6 +207,11 @@ def render_current_holdings_tab():
         display_df = display_df[['tax_wrapper_colored', 'fund_name', 'platform', 'units', 'price', 'value', 'pct_of_fund', 'pct_of_wrapper']]
         display_df.columns = ['Tax Wrapper', 'Fund Name', 'Platform', 'Units', 'Latest Price (£)', 'Current Value (£)', '% of Fund', '% of Wrapper']
 
+        # Format numeric columns with thousand separators
+        display_df['Units'] = display_df['Units'].apply(lambda x: f"{x:,.2f}")
+        display_df['Latest Price (£)'] = display_df['Latest Price (£)'].apply(lambda x: f"£{x:,.2f}")
+        display_df['Current Value (£)'] = display_df['Current Value (£)'].apply(lambda x: f"£{x:,.0f}")
+
         # Show filtered total
         st.info(f"Showing {len(display_df)} holdings | Total Value: £{table_filtered_total:,.2f}")
 
@@ -229,20 +234,17 @@ def render_current_holdings_tab():
                     "Platform",
                     width="small"
                 ),
-                "Units": st.column_config.NumberColumn(
+                "Units": st.column_config.TextColumn(
                     "Units",
-                    format="%.2f",
                     width="small"
                 ),
-                "Latest Price (£)": st.column_config.NumberColumn(
+                "Latest Price (£)": st.column_config.TextColumn(
                     "Latest Price (£)",
-                    format="£%.2f",
                     width="small",
                     help="Current price in GBP (USD/EUR converted)"
                 ),
-                "Current Value (£)": st.column_config.NumberColumn(
+                "Current Value (£)": st.column_config.TextColumn(
                     "Current Value (£)",
-                    format="£%.0f",
                     width="medium",
                     help="Current market value in GBP"
                 ),
@@ -276,6 +278,10 @@ def render_current_holdings_tab():
         display_tx_df['Type'] = display_tx_df['Type'].apply(color_transaction_type)
         display_tx_df['Tax Wrapper'] = display_tx_df['Tax Wrapper'].apply(color_tax_wrapper)
 
+        # Format numeric columns with thousand separators
+        display_tx_df['Units'] = display_tx_df['Units'].apply(lambda x: f"{float(x):,.2f}" if pd.notna(x) else "")
+        display_tx_df['Value (£)'] = display_tx_df['Value (£)'].apply(lambda x: f"£{float(x):,.2f}" if pd.notna(x) else "")
+
         st.dataframe(
             display_tx_df,
             hide_index=True,
@@ -294,14 +300,12 @@ def render_current_holdings_tab():
                     "Type",
                     width="small"
                 ),
-                "Units": st.column_config.NumberColumn(
+                "Units": st.column_config.TextColumn(
                     "Units",
-                    format="%.2f",
                     width="small"
                 ),
-                "Value (£)": st.column_config.NumberColumn(
+                "Value (£)": st.column_config.TextColumn(
                     "Value (£)",
-                    format="£%.2f",
                     width="medium"
                 ),
                 "Platform": st.column_config.TextColumn(
