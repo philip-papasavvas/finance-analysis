@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ReturnMetrics:
     """Container for calculated return metrics."""
+
     total_contributions: float
     total_withdrawals: float
     current_value: float

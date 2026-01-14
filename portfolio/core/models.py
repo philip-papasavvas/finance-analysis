@@ -4,14 +4,14 @@ Data models for portfolio analyzer.
 Contains enums for categorical data and dataclasses for domain objects.
 """
 from dataclasses import dataclass, field
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import date
 from enum import Enum, auto
 from typing import Optional
 
 
 class Platform(Enum):
     """Supported trading platforms."""
+
     FIDELITY = auto()
     INTERACTIVE_INVESTOR = auto()
     INVEST_ENGINE = auto()
@@ -22,6 +22,7 @@ class Platform(Enum):
 
 class TaxWrapper(Enum):
     """Tax wrapper types."""
+
     ISA = auto()
     SIPP = auto()
     GIA = auto()  # General Investment Account
@@ -33,6 +34,7 @@ class TaxWrapper(Enum):
 
 class TransactionType(Enum):
     """Canonical transaction types."""
+
     BUY = auto()
     SELL = auto()
     DIVIDEND = auto()
@@ -65,6 +67,7 @@ class Transaction:
     This is the canonical format that all platform-specific data
     is normalised into.
     """
+
     platform: Platform
     tax_wrapper: TaxWrapper
     date: date
@@ -95,7 +98,11 @@ class Transaction:
             "Platform": str(self.platform),
             "Date": self.date.strftime("%d/%m/%Y"),
             "Fund Name": self.fund_name,
-            "Buy/Sell": "Buy" if self.is_buy else "Sell" if self.is_sell else str(self.transaction_type),
+            "Buy/Sell": "Buy"
+            if self.is_buy
+            else "Sell"
+            if self.is_sell
+            else str(self.transaction_type),
             "Units": self.units,
             "Price (£)": self.price_per_unit,
             "Value (£)": self.value,
@@ -110,6 +117,7 @@ class CashFlow:
     Positive values = money out (withdrawals, current value)
     Negative values = money in (contributions)
     """
+
     date: date
     amount: float
     description: str = ""
@@ -128,6 +136,7 @@ class CashFlow:
 @dataclass
 class Holding:
     """Represents a current holding in the portfolio."""
+
     platform: Platform
     tax_wrapper: TaxWrapper
     fund_name: str
@@ -153,6 +162,7 @@ class Holding:
 @dataclass
 class PortfolioSummary:
     """Summary statistics for a portfolio or account."""
+
     total_contributions: float
     total_withdrawals: float
     current_value: float

@@ -79,12 +79,12 @@ def render_transaction_history_tab():
             with chart_col1:
                 timeline_fig = create_timeline_chart(df, selected_fund)
                 if timeline_fig:
-                    st.plotly_chart(timeline_fig, width='stretch')
+                    st.plotly_chart(timeline_fig, width="stretch")
 
             with chart_col2:
                 cumulative_fig = create_cumulative_units_chart(df, selected_fund)
                 if cumulative_fig:
-                    st.plotly_chart(cumulative_fig, width='stretch')
+                    st.plotly_chart(cumulative_fig, width="stretch")
 
             # Transactions table
             st.subheader("All Transactions")
@@ -96,7 +96,7 @@ def render_transaction_history_tab():
             df_display["Price (£)"] = df_display["Price (£)"].apply(lambda x: f"£{x:,.2f}")
             df_display["Value (£)"] = df_display["Value (£)"].apply(lambda x: f"£{x:,.2f}")
 
-            st.dataframe(df_display, width='stretch', hide_index=True)
+            st.dataframe(df_display, width="stretch", hide_index=True)
 
             # Export option
             st.subheader("Export")

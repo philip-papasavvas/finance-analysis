@@ -29,11 +29,11 @@ def main():
         print(f"   Total transactions: {stats['total_transactions']}")
         print(f"   Date range: {stats['first_date']} to {stats['last_date']}")
         print(f"   Unique funds: {stats['unique_funds']}")
-        print(f"   By platform:")
-        for platform, count in stats['by_platform'].items():
+        print("   By platform:")
+        for platform, count in stats["by_platform"].items():
             print(f"     - {platform}: {count}")
-        print(f"   By transaction type:")
-        for tx_type, count in stats['by_type'].items():
+        print("   By transaction type:")
+        for tx_type, count in stats["by_type"].items():
             print(f"     - {tx_type}: {count}")
 
         # 2. Get all unique funds
@@ -66,21 +66,20 @@ def main():
         print(f"   Found {len(txs_2024)} transactions in 2024")
 
         # Calculate total bought and sold in 2024
-        total_bought = sum(tx['value'] for tx in txs_2024 if tx['transaction_type'] == 'BUY')
-        total_sold = sum(tx['value'] for tx in txs_2024 if tx['transaction_type'] == 'SELL')
+        total_bought = sum(tx["value"] for tx in txs_2024 if tx["transaction_type"] == "BUY")
+        total_sold = sum(tx["value"] for tx in txs_2024 if tx["transaction_type"] == "SELL")
         print(f"   Total bought: £{total_bought:,.2f}")
         print(f"   Total sold: £{total_sold:,.2f}")
 
         # 5. Search for technology funds
         print("\n5. Technology-related funds:")
-        tech_funds = [f for f in funds if any(
-            term in f.lower()
-            for term in ['tech', 'technology', 'polar']
-        )]
+        tech_funds = [
+            f for f in funds if any(term in f.lower() for term in ["tech", "technology", "polar"])
+        ]
         print(f"   Found {len(tech_funds)} technology funds:")
         for fund in tech_funds:
             txs = db.get_transactions_by_fund(fund)
-            total_value = sum(tx['value'] for tx in txs if tx['transaction_type'] == 'BUY')
+            total_value = sum(tx["value"] for tx in txs if tx["transaction_type"] == "BUY")
             print(f"   - {fund[:60]:<60} ({len(txs)} txs, £{total_value:,.2f})")
 
         # 6. Most recent transactions

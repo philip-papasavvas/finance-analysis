@@ -6,7 +6,6 @@ Loads settings from config.yaml and provides access throughout the application.
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FidelityConfig:
     """Configuration for Fidelity data loading."""
+
     directory: str
     file_pattern: str
     skip_rows: int
@@ -25,6 +25,7 @@ class FidelityConfig:
 @dataclass
 class InteractiveInvestorConfig:
     """Configuration for Interactive Investor data loading."""
+
     directory: str
     file_pattern: str
     skip_rows: int
@@ -33,6 +34,7 @@ class InteractiveInvestorConfig:
 @dataclass
 class DataConfig:
     """Configuration for data paths and platform-specific settings."""
+
     base_path: str
     fidelity: FidelityConfig
     interactive_investor: InteractiveInvestorConfig
@@ -49,6 +51,7 @@ class DataConfig:
 @dataclass
 class LoggingConfig:
     """Configuration for logging."""
+
     level: str
     format: str
     date_format: str
@@ -57,6 +60,7 @@ class LoggingConfig:
 @dataclass
 class TransactionTypesConfig:
     """Mapping of transaction types to canonical forms."""
+
     buy: list[str] = field(default_factory=list)
     sell: list[str] = field(default_factory=list)
     dividend: list[str] = field(default_factory=list)
@@ -67,6 +71,7 @@ class TransactionTypesConfig:
 @dataclass
 class Config:
     """Main configuration container."""
+
     data: DataConfig
     logging: LoggingConfig
     transaction_types: TransactionTypesConfig

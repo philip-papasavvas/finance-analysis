@@ -23,8 +23,8 @@ from app.tabs import (
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,15 @@ def main():
     st.title("📈 Portfolio Fund Viewer")
 
     # Create tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏠 Current Holdings",
-        "📊 Funds List",
-        "🔍 Transaction History",
-        "📈 Price History",
-        "📋 Mapping Status"
-    ])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "🏠 Current Holdings",
+            "📊 Funds List",
+            "🔍 Transaction History",
+            "📈 Price History",
+            "📋 Mapping Status",
+        ]
+    )
 
     # Render each tab
     with tab1:

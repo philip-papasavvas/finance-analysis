@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TransactionFilter:
     """Filter criteria for transaction queries."""
+
     fund_name: Optional[str] = None
     platform: Optional[Platform] = None
     tax_wrapper: Optional[TaxWrapper] = None
@@ -254,9 +255,7 @@ class TransactionReport:
             return df
 
         # Create a column with standardized names
-        df["Standardized Fund Name"] = df["Fund Name"].apply(
-            self.get_standardized_name
-        )
+        df["Standardized Fund Name"] = df["Fund Name"].apply(self.get_standardized_name)
 
         # Reorder columns to show standardized name next to original
         column_order = [

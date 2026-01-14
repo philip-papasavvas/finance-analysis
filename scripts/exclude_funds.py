@@ -42,9 +42,12 @@ def exclude_funds():
     for fund_name in FUNDS_TO_EXCLUDE:
         # Check if fund exists
         cursor = db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM transactions WHERE fund_name = ?
-        """, (fund_name,))
+        """,
+            (fund_name,),
+        )
         count = cursor.fetchone()["count"]
 
         if count > 0:

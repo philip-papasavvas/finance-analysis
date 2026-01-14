@@ -26,7 +26,8 @@ def create_mapping_status_table(db: TransactionDatabase) -> None:
     """Create the mapping_status table if it doesn't exist."""
     cursor = db.conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS mapping_status (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL UNIQUE,
@@ -37,12 +38,15 @@ def create_mapping_status_table(db: TransactionDatabase) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
+    """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_mapping_status_ticker
         ON mapping_status(ticker)
-    """)
+    """
+    )
 
     db.conn.commit()
     logger.info("✓ mapping_status table created/verified")
@@ -53,19 +57,24 @@ def update_fidelity_funds_mapping(db: TransactionDatabase) -> int:
     cursor = db.conn.cursor()
 
     # Check how many Fidelity Funds records exist
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) as count FROM transactions
         WHERE fund_name = 'Fidelity Funds' AND excluded = 0
-    """)
+    """
+    )
     count = cursor.fetchone()["count"]
 
     if count > 0:
         mapped_name = "Fidelity Funds - Global Technology Fund W-ACC-GBP"
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE transactions
             SET mapped_fund_name = ?
             WHERE fund_name = 'Fidelity Funds' AND excluded = 0 AND mapped_fund_name IS NULL
-        """, (mapped_name,))
+        """,
+            (mapped_name,),
+        )
         db.conn.commit()
         logger.info(f"✓ Updated {count} 'Fidelity Funds' transactions to '{mapped_name}'")
         return count
@@ -79,7 +88,12 @@ def add_fund_ticker_mappings(db: TransactionDatabase) -> int:
     mappings = [
         ("ISHARES IV PLC, MSCI USA SRI UCITS ETF USD ACC (SUUS)", "SUUS.L", None, None),
         ("SCOTTISH MORTGAGE INV TRUST, ORD GBP0.05 (SMT)", "SMT.L", None, None),
-        ("Fidelity Funds - Global Technology Fund W-ACC-GBP", "LU1033663649", "BJVDZ16", "LU1033663649"),
+        (
+            "Fidelity Funds - Global Technology Fund W-ACC-GBP",
+            "LU1033663649",
+            "BJVDZ16",
+            "LU1033663649",
+        ),
     ]
 
     added_count = 0
@@ -87,10 +101,13 @@ def add_fund_ticker_mappings(db: TransactionDatabase) -> int:
         cursor = db.conn.cursor()
 
         # Check if fund exists in transactions
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM transactions
             WHERE (fund_name = ? OR mapped_fund_name = ?)
-        """, (fund_name, fund_name))
+        """,
+            (fund_name, fund_name),
+        )
         exists = cursor.fetchone()["count"] > 0
 
         if exists:
@@ -110,10 +127,12 @@ def populate_mapping_status(db: TransactionDatabase) -> int:
     cursor = db.conn.cursor()
 
     # Get all unique fund-ticker mappings
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT DISTINCT ticker, fund_name FROM fund_ticker_mapping
         ORDER BY ticker
-    """)
+    """
+    )
     mappings = cursor.fetchall()
 
     updated_count = 0
@@ -123,11 +142,14 @@ def populate_mapping_status(db: TransactionDatabase) -> int:
         fund_name = mapping["fund_name"]
 
         # Get date range for this fund from transactions
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT MIN(date) as earliest_date, MAX(date) as latest_date, COUNT(*) as count
             FROM transactions
             WHERE (fund_name = ? OR mapped_fund_name = ?) AND excluded = 0
-        """, (fund_name, fund_name))
+        """,
+            (fund_name, fund_name),
+        )
         result = cursor.fetchone()
 
         if result["count"] > 0:
@@ -135,7 +157,8 @@ def populate_mapping_status(db: TransactionDatabase) -> int:
             latest = result["latest_date"]
 
             # Insert or update mapping_status
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO mapping_status (ticker, fund_name, earliest_date, latest_date, transaction_count)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(ticker) DO UPDATE SET
@@ -143,7 +166,9 @@ def populate_mapping_status(db: TransactionDatabase) -> int:
                     latest_date = excluded.latest_date,
                     transaction_count = excluded.transaction_count,
                     updated_at = CURRENT_TIMESTAMP
-            """, (ticker, fund_name, earliest, latest, result["count"]))
+            """,
+                (ticker, fund_name, earliest, latest, result["count"]),
+            )
             db.conn.commit()
 
             logger.info(f"✓ {ticker}: {earliest} → {latest} ({result['count']} transactions)")
@@ -169,19 +194,25 @@ def apply_fund_name_mappings(db: TransactionDatabase) -> int:
         cursor = db.conn.cursor()
 
         # Check if this fund exists in the database
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM transactions
             WHERE fund_name = ? AND excluded = 0
-        """, (original_name,))
+        """,
+            (original_name,),
+        )
         count = cursor.fetchone()["count"]
 
         if count > 0:
             # Update the mapped_fund_name column
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE transactions
                 SET mapped_fund_name = ?
                 WHERE fund_name = ? AND excluded = 0 AND mapped_fund_name IS NULL
-            """, (mapped_name, original_name))
+            """,
+                (mapped_name, original_name),
+            )
             db.conn.commit()
             updated_count += count
 

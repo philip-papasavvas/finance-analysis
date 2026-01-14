@@ -37,25 +37,30 @@ def apply_fund_mappings():
     db = TransactionDatabase(str(DB_PATH))
 
     updated_count = 0
-    skipped_count = 0
     not_found_count = 0
 
     for original_name, mapped_name in mappings.items():
         # Check if this fund exists in the database
         cursor = db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count FROM transactions
             WHERE fund_name = ? AND excluded = 0
-        """, (original_name,))
+        """,
+            (original_name,),
+        )
         count = cursor.fetchone()["count"]
 
         if count > 0:
             # Update the mapped_fund_name column
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE transactions
                 SET mapped_fund_name = ?
                 WHERE fund_name = ? AND excluded = 0 AND mapped_fund_name IS NULL
-            """, (mapped_name, original_name))
+            """,
+                (mapped_name, original_name),
+            )
             db.conn.commit()
 
             logger.info(f"✓ {original_name}")

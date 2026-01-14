@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from portfolio.core.models import Platform, TaxWrapper, Transaction, TransactionType
+from portfolio.core.models import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ class TransactionDatabase:
 
         # transactions: Core transaction data from all trading platforms
         # Contains buy/sell records, fund names, values, and mapped names
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 platform TEXT NOT NULL,
@@ -66,11 +67,13 @@ class TransactionDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(platform, date, fund_name, transaction_type, value, reference)
             )
-        """)
+        """
+        )
 
         # price_history: Daily closing prices for all tracked tickers
         # Data sourced from yfinance; used for charts and valuations
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 date TEXT NOT NULL,
@@ -80,31 +83,45 @@ class TransactionDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(date, ticker)
             )
-        """)
+        """
+        )
 
         # Create indexes for common queries
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_date ON transactions(date)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_fund_name ON transactions(fund_name)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_platform ON transactions(platform)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_tax_wrapper ON transactions(tax_wrapper)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_price_date ON price_history(date)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_price_ticker ON price_history(ticker)
-        """)
+        """
+        )
 
         # fund_ticker_mapping: Links fund names to ticker symbols
         # Enables joining transactions to price_history for valuations
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS fund_ticker_mapping (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fund_name TEXT NOT NULL,
@@ -116,22 +133,29 @@ class TransactionDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(fund_name, ticker)
             )
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_fund_ticker_fund_name
             ON fund_ticker_mapping(fund_name)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_fund_ticker_ticker
             ON fund_ticker_mapping(ticker)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_fund_ticker_sedol
             ON fund_ticker_mapping(sedol)
-        """)
+        """
+        )
 
         self.conn.commit()
         logger.info("Database tables created/verified")
@@ -149,25 +173,28 @@ class TransactionDatabase:
         cursor = self.conn.cursor()
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO transactions (
                     platform, tax_wrapper, date, fund_name, transaction_type,
                     units, price_per_unit, value, currency, sedol, reference, raw_description
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                transaction.platform.name,
-                transaction.tax_wrapper.name,
-                transaction.date.isoformat(),
-                transaction.fund_name,
-                transaction.transaction_type.name,
-                transaction.units,
-                transaction.price_per_unit,
-                transaction.value,
-                transaction.currency,
-                transaction.sedol,
-                transaction.reference,
-                transaction.raw_description,
-            ))
+            """,
+                (
+                    transaction.platform.name,
+                    transaction.tax_wrapper.name,
+                    transaction.date.isoformat(),
+                    transaction.fund_name,
+                    transaction.transaction_type.name,
+                    transaction.units,
+                    transaction.price_per_unit,
+                    transaction.value,
+                    transaction.currency,
+                    transaction.sedol,
+                    transaction.reference,
+                    transaction.raw_description,
+                ),
+            )
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -204,9 +231,11 @@ class TransactionDatabase:
             List of transaction dictionaries.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM transactions ORDER BY date
-        """)
+        """
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def get_transactions_by_fund(self, fund_name: str) -> list[dict]:
@@ -220,11 +249,14 @@ class TransactionDatabase:
             List of matching transactions.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM transactions
             WHERE fund_name LIKE ?
             ORDER BY date
-        """, (f"%{fund_name}%",))
+        """,
+            (f"%{fund_name}%",),
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def get_transactions_by_date_range(
@@ -243,11 +275,14 @@ class TransactionDatabase:
             List of transactions.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM transactions
             WHERE date BETWEEN ? AND ?
             ORDER BY date
-        """, (start_date.isoformat(), end_date.isoformat()))
+        """,
+            (start_date.isoformat(), end_date.isoformat()),
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def get_summary_stats(self) -> dict:
@@ -265,24 +300,30 @@ class TransactionDatabase:
         cursor.execute("SELECT MIN(date) as first_date, MAX(date) as last_date FROM transactions")
         dates = cursor.fetchone()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT transaction_type, COUNT(*) as count
             FROM transactions
             GROUP BY transaction_type
-        """)
+        """
+        )
         by_type = {row["transaction_type"]: row["count"] for row in cursor.fetchall()}
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT platform, COUNT(*) as count
             FROM transactions
             GROUP BY platform
-        """)
+        """
+        )
         by_platform = {row["platform"]: row["count"] for row in cursor.fetchall()}
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(DISTINCT fund_name) as unique_funds
             FROM transactions
-        """)
+        """
+        )
         unique_funds = cursor.fetchone()["unique_funds"]
 
         return {
@@ -302,11 +343,13 @@ class TransactionDatabase:
             Sorted list of unique fund names.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT fund_name
             FROM transactions
             ORDER BY fund_name
-        """)
+        """
+        )
         return [row["fund_name"] for row in cursor.fetchall()]
 
     def exclude_fund(self, fund_name: str) -> None:
@@ -317,9 +360,12 @@ class TransactionDatabase:
             fund_name: The fund name to exclude.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE transactions SET excluded = 1 WHERE fund_name = ?
-        """, (fund_name,))
+        """,
+            (fund_name,),
+        )
         self.conn.commit()
         logger.info(f"Excluded fund: {fund_name}")
 
@@ -332,9 +378,12 @@ class TransactionDatabase:
             mapped_name: The mapped fund name.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE transactions SET mapped_fund_name = ? WHERE fund_name = ? AND mapped_fund_name IS NULL
-        """, (mapped_name, fund_name))
+        """,
+            (mapped_name, fund_name),
+        )
         self.conn.commit()
         logger.info(f"Set mapped name: {fund_name} → {mapped_name}")
 
@@ -352,7 +401,9 @@ class TransactionDatabase:
         logger.warning(f"Deleted {deleted} transactions from database")
         return deleted
 
-    def insert_price_history(self, date: str, ticker: str, fund_name: str, close_price: float) -> bool:
+    def insert_price_history(
+        self, date: str, ticker: str, fund_name: str, close_price: float
+    ) -> bool:
         """
         Insert a single price history record into the database.
 
@@ -368,10 +419,13 @@ class TransactionDatabase:
         cursor = self.conn.cursor()
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO price_history (date, ticker, fund_name, close_price)
                 VALUES (?, ?, ?, ?)
-            """, (date, ticker, fund_name, close_price))
+            """,
+                (date, ticker, fund_name, close_price),
+            )
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -393,10 +447,7 @@ class TransactionDatabase:
 
         for record in records:
             if self.insert_price_history(
-                record['date'],
-                record['ticker'],
-                record['fund_name'],
-                record['close_price']
+                record["date"], record["ticker"], record["fund_name"], record["close_price"]
             ):
                 inserted += 1
             else:
@@ -416,12 +467,15 @@ class TransactionDatabase:
             List of price history records sorted by date.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT date, ticker, fund_name, close_price
             FROM price_history
             WHERE ticker = ?
             ORDER BY date
-        """, (ticker,))
+        """,
+            (ticker,),
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def get_all_price_tickers(self) -> list[str]:
@@ -432,10 +486,12 @@ class TransactionDatabase:
             Sorted list of unique ticker symbols.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT ticker FROM price_history ORDER BY ticker
-        """)
-        return [row['ticker'] for row in cursor.fetchall()]
+        """
+        )
+        return [row["ticker"] for row in cursor.fetchall()]
 
     def get_ticker_info(self) -> list[dict]:
         """
@@ -445,7 +501,8 @@ class TransactionDatabase:
             List of dictionaries with ticker information.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 ticker,
                 fund_name,
@@ -455,7 +512,8 @@ class TransactionDatabase:
             FROM price_history
             GROUP BY ticker
             ORDER BY ticker
-        """)
+        """
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def add_fund_ticker_mapping(
@@ -481,11 +539,14 @@ class TransactionDatabase:
         """
         cursor = self.conn.cursor()
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO fund_ticker_mapping
                 (fund_name, ticker, sedol, isin, is_auto_mapped)
                 VALUES (?, ?, ?, ?, ?)
-            """, (fund_name, ticker, sedol, isin, 1 if is_auto_mapped else 0))
+            """,
+                (fund_name, ticker, sedol, isin, 1 if is_auto_mapped else 0),
+            )
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -502,11 +563,14 @@ class TransactionDatabase:
             Ticker symbol if found, None otherwise.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ticker FROM fund_ticker_mapping
             WHERE fund_name = ?
             LIMIT 1
-        """, (fund_name,))
+        """,
+            (fund_name,),
+        )
         result = cursor.fetchone()
         return result["ticker"] if result else None
 
@@ -524,7 +588,8 @@ class TransactionDatabase:
             List of transaction records with date, type, units, prices, and marker_y.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 t.date,
                 t.transaction_type,
@@ -540,7 +605,9 @@ class TransactionDatabase:
               AND t.excluded = 0
               AND t.transaction_type IN ('BUY', 'SELL')
             ORDER BY t.date
-        """, (ticker,))
+        """,
+            (ticker,),
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def get_all_fund_ticker_mappings(self) -> list[dict]:
@@ -551,11 +618,13 @@ class TransactionDatabase:
             List of mapping records.
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT fund_name, ticker, sedol, isin, is_auto_mapped, created_at
             FROM fund_ticker_mapping
             ORDER BY ticker, fund_name
-        """)
+        """
+        )
         return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:

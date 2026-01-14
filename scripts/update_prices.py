@@ -28,7 +28,6 @@ Usage:
 """
 import argparse
 import logging
-import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
@@ -41,11 +40,12 @@ import pandas as pd
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from portfolio.core.database import TransactionDatabase
+from portfolio.core.database import TransactionDatabase  # noqa: E402
 
 # Attempt to import yfinance
 try:
     import yfinance as yf
+
     YFINANCE_AVAILABLE = True
 except ImportError:
     YFINANCE_AVAILABLE = False
@@ -61,6 +61,7 @@ RETRY_DELAY = 5  # Seconds between retries
 @dataclass
 class UpdateResult:
     """Result of a price update operation."""
+
     ticker: str
     fund_name: str
     records_fetched: int = 0
@@ -74,6 +75,7 @@ class UpdateResult:
 @dataclass
 class UpdateReport:
     """Summary report of all update operations."""
+
     results: list[UpdateResult] = field(default_factory=list)
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
@@ -200,11 +202,13 @@ class PriceUpdater:
             List of (ticker, fund_name) tuples
         """
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT ticker, fund_name
             FROM fund_ticker_mapping
             ORDER BY ticker
-        """)
+        """
+        )
         return [(row["ticker"], row["fund_name"]) for row in cursor.fetchall()]
 
     def get_existing_dates(self, ticker: str) -> set[str]:
@@ -218,10 +222,13 @@ class PriceUpdater:
             Set of date strings (YYYY-MM-DD)
         """
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT date FROM price_history
             WHERE ticker = ?
-        """, (ticker,))
+        """,
+            (ticker,),
+        )
         return {row["date"] for row in cursor.fetchall()}
 
     def get_trading_days(self, start_date: date, end_date: date) -> set[str]:
@@ -305,9 +312,7 @@ class PriceUpdater:
                 return pd.DataFrame()
 
             except Exception as e:
-                self.logger.warning(
-                    f"Attempt {attempt + 1}/{retries} failed for {ticker}: {e}"
-                )
+                self.logger.warning(f"Attempt {attempt + 1}/{retries} failed for {ticker}: {e}")
                 if attempt < retries - 1:
                     time.sleep(RETRY_DELAY)
 
@@ -336,17 +341,19 @@ class PriceUpdater:
             try:
                 # Handle both single-column and multi-column DataFrame formats
                 close_val = row["Close"]
-                if hasattr(close_val, 'iloc'):
+                if hasattr(close_val, "iloc"):
                     close_price = float(close_val.iloc[0])
                 else:
                     close_price = float(close_val)
                 if close_price > 0:
-                    records.append({
-                        "date": date_idx.strftime("%Y-%m-%d"),
-                        "ticker": ticker,
-                        "fund_name": fund_name,
-                        "close_price": close_price,
-                    })
+                    records.append(
+                        {
+                            "date": date_idx.strftime("%Y-%m-%d"),
+                            "ticker": ticker,
+                            "fund_name": fund_name,
+                            "close_price": close_price,
+                        }
+                    )
             except (ValueError, TypeError, KeyError):
                 continue
         return records
@@ -408,9 +415,7 @@ class PriceUpdater:
                 start_str = min_date.isoformat()
                 end_str = (max_date + timedelta(days=1)).isoformat()
 
-            self.logger.info(
-                f"  {ticker}: Fetching {start_str} to {max_date.isoformat()}..."
-            )
+            self.logger.info(f"  {ticker}: Fetching {start_str} to {max_date.isoformat()}...")
 
             # Rate limiting
             time.sleep(RATE_LIMIT_DELAY)
@@ -428,18 +433,14 @@ class PriceUpdater:
             result.records_fetched = len(records)
 
             if self.dry_run:
-                self.logger.info(
-                    f"  {ticker}: Would insert {len(records)} records (dry run)"
-                )
+                self.logger.info(f"  {ticker}: Would insert {len(records)} records (dry run)")
                 result.records_skipped = len(records)
             else:
                 # Insert into database
                 inserted, skipped = self.insert_prices(records)
                 result.records_inserted = inserted
                 result.records_skipped = skipped
-                self.logger.info(
-                    f"  {ticker}: Inserted {inserted}, skipped {skipped} duplicates"
-                )
+                self.logger.info(f"  {ticker}: Inserted {inserted}, skipped {skipped} duplicates")
 
         except Exception as e:
             result.errors.append(str(e))
@@ -529,9 +530,7 @@ def parse_date(date_str: str) -> date:
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"Invalid date format: {date_str}. Use YYYY-MM-DD."
-        )
+        raise argparse.ArgumentTypeError(f"Invalid date format: {date_str}. Use YYYY-MM-DD.")
 
 
 def main():
@@ -584,7 +583,8 @@ Examples:
         help="Preview changes without committing to database",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose/debug output",
     )

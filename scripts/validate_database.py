@@ -41,19 +41,11 @@ class DatabaseValidator:
 
     def _add_issue(self, check: str, message: str, details: list | None = None) -> None:
         """Record an issue found during validation."""
-        self.issues.append({
-            "check": check,
-            "message": message,
-            "details": details or []
-        })
+        self.issues.append({"check": check, "message": message, "details": details or []})
 
     def _add_warning(self, check: str, message: str, details: list | None = None) -> None:
         """Record a warning (non-critical issue)."""
-        self.warnings.append({
-            "check": check,
-            "message": message,
-            "details": details or []
-        })
+        self.warnings.append({"check": check, "message": message, "details": details or []})
 
     def check_orphaned_funds(self) -> int:
         """
@@ -64,7 +56,8 @@ class DatabaseValidator:
         logger.info("Checking for orphaned funds (no ticker mapping)...")
         cursor = self.conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT t.fund_name, COUNT(*) as tx_count
             FROM transactions t
             LEFT JOIN fund_ticker_mapping ftm ON t.fund_name = ftm.fund_name
@@ -72,15 +65,14 @@ class DatabaseValidator:
               AND t.excluded = 0
             GROUP BY t.fund_name
             ORDER BY tx_count DESC
-        """)
+        """
+        )
 
         orphans = cursor.fetchall()
         if orphans:
             details = [f"{row['fund_name']} ({row['tx_count']} transactions)" for row in orphans]
             self._add_warning(
-                "orphaned_funds",
-                f"Found {len(orphans)} funds without ticker mappings",
-                details
+                "orphaned_funds", f"Found {len(orphans)} funds without ticker mappings", details
             )
             return len(orphans)
 
@@ -97,15 +89,18 @@ class DatabaseValidator:
         cursor = self.conn.cursor()
 
         # Check if mapping_status table exists
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT name FROM sqlite_master
             WHERE type='table' AND name='mapping_status'
-        """)
+        """
+        )
         if not cursor.fetchone():
             logger.info("  ⊘ mapping_status table doesn't exist, skipping check")
             return 0
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 ms.ticker,
                 ms.fund_name,
@@ -120,7 +115,8 @@ class DatabaseValidator:
             WHERE t.excluded = 0
             GROUP BY ms.ticker
             HAVING actual_earliest != status_earliest OR actual_latest != status_latest
-        """)
+        """
+        )
 
         mismatches = cursor.fetchall()
         if mismatches:
@@ -132,7 +128,7 @@ class DatabaseValidator:
             self._add_warning(
                 "date_range_mismatch",
                 f"Found {len(mismatches)} tickers with outdated mapping_status dates",
-                details
+                details,
             )
             return len(mismatches)
 
@@ -148,20 +144,22 @@ class DatabaseValidator:
         logger.info("Checking for duplicate price records...")
         cursor = self.conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT date, ticker, COUNT(*) as count
             FROM price_history
             GROUP BY date, ticker
             HAVING count > 1
-        """)
+        """
+        )
 
         duplicates = cursor.fetchall()
         if duplicates:
-            details = [f"{row['date']} {row['ticker']}: {row['count']} records" for row in duplicates]
+            details = [
+                f"{row['date']} {row['ticker']}: {row['count']} records" for row in duplicates
+            ]
             self._add_issue(
-                "duplicate_prices",
-                f"Found {len(duplicates)} duplicate price entries",
-                details
+                "duplicate_prices", f"Found {len(duplicates)} duplicate price entries", details
             )
             return len(duplicates)
 
@@ -177,7 +175,8 @@ class DatabaseValidator:
         logger.info("Checking for missing price data on transaction dates...")
         cursor = self.conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 ftm.ticker,
                 t.date,
@@ -190,23 +189,26 @@ class DatabaseValidator:
               AND t.excluded = 0
               AND t.transaction_type IN ('BUY', 'SELL')
             ORDER BY ftm.ticker, t.date
-        """)
+        """
+        )
 
         missing = cursor.fetchall()
         if missing:
             # Group by ticker for cleaner output
             by_ticker: dict[str, list[str]] = {}
             for row in missing:
-                ticker = row['ticker']
+                ticker = row["ticker"]
                 if ticker not in by_ticker:
                     by_ticker[ticker] = []
-                by_ticker[ticker].append(row['date'])
+                by_ticker[ticker].append(row["date"])
 
-            details = [f"{ticker}: missing {len(dates)} dates" for ticker, dates in by_ticker.items()]
+            details = [
+                f"{ticker}: missing {len(dates)} dates" for ticker, dates in by_ticker.items()
+            ]
             self._add_warning(
                 "missing_prices",
                 f"Found {len(missing)} transactions without corresponding price data",
-                details
+                details,
             )
             return len(missing)
 
@@ -222,12 +224,14 @@ class DatabaseValidator:
         logger.info("Checking ticker consistency (mappings vs price_history)...")
         cursor = self.conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT ftm.ticker, ftm.fund_name
             FROM fund_ticker_mapping ftm
             LEFT JOIN price_history ph ON ftm.ticker = ph.ticker
             WHERE ph.id IS NULL
-        """)
+        """
+        )
 
         missing_tickers = cursor.fetchall()
         if missing_tickers:
@@ -235,7 +239,7 @@ class DatabaseValidator:
             self._add_issue(
                 "missing_ticker_prices",
                 f"Found {len(missing_tickers)} tickers with no price history",
-                details
+                details,
             )
             return len(missing_tickers)
 
@@ -273,9 +277,9 @@ class DatabaseValidator:
             logger.error(f"✗ {len(self.issues)} ISSUE(S) FOUND:")
             for issue in self.issues:
                 logger.error(f"  [{issue['check']}] {issue['message']}")
-                for detail in issue['details'][:5]:  # Show first 5 details
+                for detail in issue["details"][:5]:  # Show first 5 details
                     logger.error(f"    - {detail}")
-                if len(issue['details']) > 5:
+                if len(issue["details"]) > 5:
                     logger.error(f"    ... and {len(issue['details']) - 5} more")
         else:
             logger.info("✓ No critical issues found")
@@ -286,9 +290,9 @@ class DatabaseValidator:
             logger.warning(f"⚠ {len(self.warnings)} WARNING(S):")
             for warning in self.warnings:
                 logger.warning(f"  [{warning['check']}] {warning['message']}")
-                for detail in warning['details'][:5]:  # Show first 5 details
+                for detail in warning["details"][:5]:  # Show first 5 details
                     logger.warning(f"    - {detail}")
-                if len(warning['details']) > 5:
+                if len(warning["details"]) > 5:
                     logger.warning(f"    ... and {len(warning['details']) - 5} more")
         else:
             logger.info("✓ No warnings")
@@ -310,13 +314,9 @@ class DatabaseValidator:
 
 def main():
     """Run database validation."""
-    parser = argparse.ArgumentParser(
-        description="Validate portfolio database integrity"
-    )
+    parser = argparse.ArgumentParser(description="Validate portfolio database integrity")
     parser.add_argument(
-        "--db-path",
-        default="portfolio.db",
-        help="Path to SQLite database (default: portfolio.db)"
+        "--db-path", default="portfolio.db", help="Path to SQLite database (default: portfolio.db)"
     )
     args = parser.parse_args()
 

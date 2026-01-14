@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from portfolio.loaders import FidelityLoader, InteractiveInvestorLoader, InvestEngineLoader
-from src.reports import TransactionReport, get_unique_funds
+from src.reports import get_unique_funds
 
 # Configure logging
 logging.basicConfig(
@@ -52,7 +52,7 @@ def main():
     all_transactions.sort(key=lambda t: t.date)
 
     logger.info(f"\n{'='*80}")
-    logger.info(f"TRANSACTION SUMMARY")
+    logger.info("TRANSACTION SUMMARY")
     logger.info(f"{'='*80}")
     logger.info(f"Total Fidelity transactions: {len(fidelity_transactions)}")
     logger.info(f"Total II transactions: {len(ii_transactions)}")
@@ -73,13 +73,13 @@ def main():
         # Transaction type breakdown
         buy_count = sum(1 for t in all_transactions if t.is_buy)
         sell_count = sum(1 for t in all_transactions if t.is_sell)
-        logger.info(f"\nTransaction types:")
+        logger.info("\nTransaction types:")
         logger.info(f"  Buy: {buy_count}")
         logger.info(f"  Sell: {sell_count}")
         logger.info(f"  Other: {len(all_transactions) - buy_count - sell_count}")
 
         # Show first few transactions
-        logger.info(f"\nFirst 5 transactions:")
+        logger.info("\nFirst 5 transactions:")
         for tx in all_transactions[:5]:
             logger.info(
                 f"  {tx.date} | {tx.platform.name[:4]} | {tx.tax_wrapper.name} | "

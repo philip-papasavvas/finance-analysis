@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from portfolio.core.database import TransactionDatabase
-from app.data import sql, get_all_funds_from_db, get_fund_holdings
+from app.data import sql, get_all_funds_from_db
 
 
 def render_funds_list_tab():
@@ -13,7 +13,6 @@ def render_funds_list_tab():
 
     # Get all funds and holdings
     funds_dict = get_all_funds_from_db()
-    holdings_df = get_fund_holdings()
 
     if not funds_dict:
         st.error("No transactions found in the database. Please load transactions first.")
@@ -29,14 +28,16 @@ def render_funds_list_tab():
 
     funds_list_data = []
     for row in cursor.fetchall():
-        funds_list_data.append({
-            "Fund Name": row["display_name"],
-            "Transactions": row["tx_count"],
-        })
+        funds_list_data.append(
+            {
+                "Fund Name": row["display_name"],
+                "Transactions": row["tx_count"],
+            }
+        )
     db.close()
 
     if funds_list_data:
         funds_df = pd.DataFrame(funds_list_data)
-        st.dataframe(funds_df, width='stretch', hide_index=True)
+        st.dataframe(funds_df, width="stretch", hide_index=True)
     else:
         st.info("No funds found")

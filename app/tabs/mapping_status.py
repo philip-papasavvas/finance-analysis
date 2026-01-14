@@ -18,14 +18,17 @@ def render_mapping_status_tab():
     else:
         # Create display dataframe with checkmarks and crosses
         display_df = mapping_df.copy()
-        display_df.rename(columns={
-            "fund_name": "Fund Name",
-            "mapped_fund_name": "Mapped Name",
-            "transaction_count": "Transactions",
-            "ticker": "Ticker",
-            "has_price_history": "Price History",
-            "vip": "VIP"
-        }, inplace=True)
+        display_df.rename(
+            columns={
+                "fund_name": "Fund Name",
+                "mapped_fund_name": "Mapped Name",
+                "transaction_count": "Transactions",
+                "ticker": "Ticker",
+                "has_price_history": "Price History",
+                "vip": "VIP",
+            },
+            inplace=True,
+        )
 
         # Format the Price History column with emoji checkmarks/crosses
         display_df["Price History"] = display_df["Price History"].apply(
@@ -33,9 +36,7 @@ def render_mapping_status_tab():
         )
 
         # Format the VIP column with star emoji
-        display_df["VIP"] = display_df["VIP"].apply(
-            lambda x: "⭐" if x else ""
-        )
+        display_df["VIP"] = display_df["VIP"].apply(lambda x: "⭐" if x else "")
 
         # Display summary stats
         col1, col2, col3 = st.columns(3)
@@ -54,7 +55,7 @@ def render_mapping_status_tab():
         st.subheader("Fund Mapping Details")
         st.dataframe(
             display_df,
-            width='stretch',
+            width="stretch",
             hide_index=True,
             column_config={
                 "VIP": st.column_config.TextColumn("VIP", width="small"),
@@ -63,7 +64,7 @@ def render_mapping_status_tab():
                 "Transactions": st.column_config.NumberColumn("Transactions", width="small"),
                 "Ticker": st.column_config.TextColumn("Ticker", width="medium"),
                 "Price History": st.column_config.TextColumn("Price History", width="small"),
-            }
+            },
         )
 
         # Show unmapped funds if any
@@ -74,13 +75,9 @@ def render_mapping_status_tab():
             st.warning(f"{len(unmapped)} funds don't have ticker mappings yet")
 
             unmapped_display = unmapped[["fund_name", "transaction_count"]].copy()
-            unmapped_display.rename(columns={
-                "fund_name": "Fund Name",
-                "transaction_count": "Transaction Count"
-            }, inplace=True)
-
-            st.dataframe(
-                unmapped_display,
-                width='stretch',
-                hide_index=True
+            unmapped_display.rename(
+                columns={"fund_name": "Fund Name", "transaction_count": "Transaction Count"},
+                inplace=True,
             )
+
+            st.dataframe(unmapped_display, width="stretch", hide_index=True)

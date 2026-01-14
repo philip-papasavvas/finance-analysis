@@ -26,13 +26,10 @@ def create_fund_name_mapping() -> dict[str, str]:
         # Blue Whale variants → Blue Whale Growth R Acc
         "WS Blue Whale Growth": "Blue Whale Growth R Acc",
         "WS Blue Whale Growth Fund R Acc": "Blue Whale Growth R Acc",
-
         # Scottish Mortgage variants → Scottish Mortgage
         "SCOTTISH MORTGAGE INV TRUST, ORD GBP0.05 (SMT)": "Scottish Mortgage",
-
         # Polar Capital variants → Polar Capital Technology
         "Polar Capital Global Technology I GBP": "Polar Capital Technology",
-
         # Fidelity variants → Fidelity Global Tech
         "Fidelity Funds - Global Technology Fund W-ACC-GBP": "Fidelity Global Tech",
         "Fidelity Investment": "Fidelity Global Tech",
@@ -52,7 +49,7 @@ def extract_ticker_from_name(fund_name: str) -> str:
         Ticker symbol if found, otherwise original name.
     """
     # Match 3-4 letter ticker in parentheses at the end
-    ticker_pattern = re.compile(r'\(([A-Z]{3,4})\)$')
+    ticker_pattern = re.compile(r"\(([A-Z]{3,4})\)$")
     match = ticker_pattern.search(fund_name)
 
     if match:
@@ -73,7 +70,7 @@ def standardize_fund_names(db_path: str = "portfolio.db", dry_run: bool = True) 
     cursor = conn.cursor()
 
     # Get all unique fund names
-    cursor.execute('SELECT DISTINCT fund_name FROM transactions ORDER BY fund_name')
+    cursor.execute("SELECT DISTINCT fund_name FROM transactions ORDER BY fund_name")
     all_funds = [row[0] for row in cursor.fetchall()]
 
     # Create mapping
@@ -81,20 +78,20 @@ def standardize_fund_names(db_path: str = "portfolio.db", dry_run: bool = True) 
 
     # Add ticker-based mappings for funds with parentheses
     for fund in all_funds:
-        if re.search(r'\([A-Z]{3,4}\)$', fund):
+        if re.search(r"\([A-Z]{3,4}\)$", fund):
             standardized = extract_ticker_from_name(fund)
             if standardized != fund:
                 mapping[fund] = standardized
 
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info(f"FUND NAME STANDARDIZATION {'(DRY RUN)' if dry_run else ''}")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     changes_made = 0
 
     for original, standardized in sorted(mapping.items()):
         # Check if this fund exists in the database
-        cursor.execute('SELECT COUNT(*) FROM transactions WHERE fund_name = ?', (original,))
+        cursor.execute("SELECT COUNT(*) FROM transactions WHERE fund_name = ?", (original,))
         count = cursor.fetchone()[0]
 
         if count > 0:
@@ -104,8 +101,8 @@ def standardize_fund_names(db_path: str = "portfolio.db", dry_run: bool = True) 
 
             if not dry_run:
                 cursor.execute(
-                    'UPDATE transactions SET fund_name = ? WHERE fund_name = ?',
-                    (standardized, original)
+                    "UPDATE transactions SET fund_name = ? WHERE fund_name = ?",
+                    (standardized, original),
                 )
                 changes_made += count
 
@@ -115,7 +112,7 @@ def standardize_fund_names(db_path: str = "portfolio.db", dry_run: bool = True) 
         logger.info(f"✓ Updated {changes_made} transactions")
 
         # Show new unique fund count
-        cursor.execute('SELECT COUNT(DISTINCT fund_name) FROM transactions')
+        cursor.execute("SELECT COUNT(DISTINCT fund_name) FROM transactions")
         new_count = cursor.fetchone()[0]
         logger.info(f"✓ Unique funds after standardization: {new_count}")
     else:
@@ -142,13 +139,16 @@ def populate_fund_mappings(db_path: str = "portfolio.db") -> None:
         db_path: Path to the SQLite database.
     """
     import warnings
+
     warnings.warn(
         "populate_fund_mappings() is deprecated. The fund_name_mapping table has been removed. "
         "Use src/apply_fund_mapping.py instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
-    logger.warning("DEPRECATED: populate_fund_mappings() - fund_name_mapping table no longer exists")
+    logger.warning(
+        "DEPRECATED: populate_fund_mappings() - fund_name_mapping table no longer exists"
+    )
     return  # Early return - do not execute
 
     # Original code below (kept for reference, but unreachable)
@@ -162,14 +162,14 @@ def populate_fund_mappings(db_path: str = "portfolio.db") -> None:
 
     # Add ticker-based mappings for funds with parentheses
     for fund in all_funds:
-        if re.search(r'\([A-Z]{3,4}\)$', fund):
+        if re.search(r"\([A-Z]{3,4}\)$", fund):
             standardized = extract_ticker_from_name(fund)
             if standardized != fund and fund not in mapping:
                 mapping[fund] = standardized
 
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info("POPULATING FUND NAME MAPPING TABLE")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     added = 0
     skipped = 0
@@ -194,17 +194,19 @@ def show_standardized_summary(db_path: str = "portfolio.db") -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("FUND SUMMARY AFTER STANDARDIZATION")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT fund_name, COUNT(*) as tx_count
         FROM transactions
         GROUP BY fund_name
         ORDER BY tx_count DESC
         LIMIT 15
-    ''')
+    """
+    )
 
     logger.info("\nTop 15 funds by transaction count:")
     for fund, count in cursor.fetchall():
@@ -215,19 +217,19 @@ def show_standardized_summary(db_path: str = "portfolio.db") -> None:
 
 if __name__ == "__main__":
     # First, show what would change (dry run)
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("STEP 1: DRY RUN - Preview changes")
-    print("="*80)
+    print("=" * 80)
     standardize_fund_names(dry_run=True)
 
     # Ask for confirmation
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     response = input("\nApply these changes? (yes/no): ").strip().lower()
 
     if response == "yes":
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("STEP 2: Applying changes...")
-        print("="*80)
+        print("=" * 80)
         standardize_fund_names(dry_run=False)
 
         # NOTE: populate_fund_mappings() is deprecated and skipped
