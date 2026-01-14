@@ -1,0 +1,76 @@
+# Pre-commit hooks configuration for finance-analysis
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Python code formatting with Black
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.13
+        args: [--line-length=100]
+
+  # Linting with Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.11
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --no-error-summary]
+        additional_dependencies: []
+
+#  # Unit tests - CRITICAL: Run all tests before committing
+#  - repo: local
+#    hooks:
+#      - id: pytest
+#        name: pytest
+#        entry: bash -c 'python -m pytest tests/ -v --tb=short'
+#        language: system
+#        types: [python]
+#        stages: [pre-commit]
+#        pass_filenames: false
+#        always_run: true
+#        verbose: true
+#
+#  # Unit tests with coverage - Run before push
+#  - repo: local
+#    hooks:
+#      - id: pytest-coverage
+#        name: pytest-cov
+#        entry: bash -c 'python -m pytest tests/ --cov=portfolio --cov=app --cov=scripts --cov-report=term-missing'
+#        language: system
+#        types: [python]
+#        stages: [pre-push]
+#        pass_filenames: false
+#        always_run: true
+
+  # File size check
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: debug-statements
+
+# Configuration
+default_language_version:
+  python: python3.13
+
+# Fail fast on first error
+fail_fast: false
+
+# Minimum pre-commit version
+minimum_pre_commit_version: 2.15.0
