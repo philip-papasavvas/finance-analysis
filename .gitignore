@@ -1,6 +1,6 @@
 # Private data (contains sensitive financial information)
-data/
-reports/
+/data/
+/reports/
 
 # Database files
 *.db
