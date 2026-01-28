@@ -14,10 +14,10 @@ import streamlit as st
 
 from app.tabs import (
     render_current_holdings_tab,
-    render_funds_list_tab,
     render_transaction_history_tab,
     render_price_history_tab,
     render_mapping_status_tab,
+    render_portfolio_performance_tab,
 )
 
 # Configure logging
@@ -36,10 +36,10 @@ def main():
     st.title("📈 Portfolio Fund Viewer")
 
     # Create tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    holdings_tab, performance_tab, transactions_tab, prices_tab, mapping_tab = st.tabs(
         [
             "🏠 Current Holdings",
-            "📊 Funds List",
+            "💹 Portfolio Performance",
             "🔍 Transaction History",
             "📈 Price History",
             "📋 Mapping Status",
@@ -47,19 +47,19 @@ def main():
     )
 
     # Render each tab
-    with tab1:
+    with holdings_tab:
         render_current_holdings_tab()
 
-    with tab2:
-        render_funds_list_tab()
+    with performance_tab:
+        render_portfolio_performance_tab()
 
-    with tab3:
+    with transactions_tab:
         render_transaction_history_tab()
 
-    with tab4:
+    with prices_tab:
         render_price_history_tab()
 
-    with tab5:
+    with mapping_tab:
         render_mapping_status_tab()
 
 
