@@ -17,7 +17,6 @@ from app.tabs import (
     render_transaction_history_tab,
     render_price_history_tab,
     render_mapping_status_tab,
-    render_portfolio_performance_tab,
 )
 
 # Configure logging
@@ -36,10 +35,9 @@ def main():
     st.title("📈 Portfolio Fund Viewer")
 
     # Create tabs
-    holdings_tab, performance_tab, transactions_tab, prices_tab, mapping_tab = st.tabs(
+    holdings_tab, transactions_tab, prices_tab, mapping_tab = st.tabs(
         [
             "🏠 Current Holdings",
-            "💹 Portfolio Performance",
             "🔍 Transaction History",
             "📈 Price History",
             "📋 Mapping Status",
@@ -49,9 +47,6 @@ def main():
     # Render each tab
     with holdings_tab:
         render_current_holdings_tab()
-
-    with performance_tab:
-        render_portfolio_performance_tab()
 
     with transactions_tab:
         render_transaction_history_tab()

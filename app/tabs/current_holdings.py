@@ -4,7 +4,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from app.data import get_current_holdings_vip, get_recent_transactions
+from app.data import (
+    get_current_holdings_vip,
+    get_recent_transactions,
+    get_aggregated_holdings,
+    get_price_history,
+)
 
 
 # Color mapping for tax wrappers
@@ -13,6 +18,13 @@ WRAPPER_COLORS = {
     "SIPP": "#2ca02c",  # Green
     "GIA": "#ff7f0e",  # Orange
     "OTHER": "#d62728",  # Red
+}
+
+# Emoji for tax wrappers
+WRAPPER_EMOJI = {
+    "ISA": "🔵",
+    "SIPP": "🟢",
+    "GIA": "🟠",
 }
 
 
@@ -31,10 +43,154 @@ def color_transaction_type(tx_type: str) -> str:
     return tx_type
 
 
+def render_at_a_glance_section():
+    """Render the Portfolio At a Glance section with aggregated holdings."""
+    st.subheader("📊 Portfolio At a Glance")
+    st.markdown("*Aggregated positions sorted by value • Click to expand breakdown*")
+
+    aggregated = get_aggregated_holdings()
+
+    if not aggregated:
+        st.warning("No holdings data available.")
+        return
+
+    # Calculate totals
+    total_value = sum(h["total_value"] for h in aggregated)
+    total_cost = sum(h["cost_basis"] for h in aggregated)
+    total_gain = total_value - total_cost
+    total_gain_pct = (total_gain / total_cost * 100) if total_cost > 0 else 0
+
+    # Summary metrics row
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("💰 Total Value", f"£{total_value:,.0f}")
+    with col2:
+        st.metric("💵 Total Cost", f"£{total_cost:,.0f}")
+    with col3:
+        st.metric("📈 Total Gain/Loss", f"£{total_gain:,.0f}", delta=f"{total_gain_pct:+.1f}%")
+    with col4:
+        st.metric("🏦 Positions", len(aggregated))
+
+    st.divider()
+
+    # Render each holding as an expandable card
+    for holding in aggregated:
+        ticker = holding["ticker"]
+        fund_name = holding["fund_name"]
+        total_units = holding["total_units"]
+        price = holding["price"]
+        total_value = holding["total_value"]
+        cost_basis = holding["cost_basis"]
+        gain_loss = holding["gain_loss"]
+        gain_loss_pct = holding["gain_loss_pct"]
+        holdings_breakdown = holding["holdings"]
+
+        # Determine gain/loss emoji
+        gain_emoji = "📈" if gain_loss >= 0 else "📉"
+
+        # Create expander label with key info
+        pct_of_portfolio = total_value / sum(h["total_value"] for h in aggregated) * 100
+        label = f"**{fund_name}** — £{total_value:,.0f} ({pct_of_portfolio:.1f}%)"
+
+        with st.expander(label, expanded=False):
+            # Summary row
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.metric("Ticker", ticker)
+            with col2:
+                st.metric("Total Units", f"{total_units:,.2f}")
+            with col3:
+                st.metric("Price", f"£{price:,.2f}")
+            with col4:
+                st.metric("Cost Basis", f"£{cost_basis:,.0f}")
+            with col5:
+                st.metric(
+                    f"{gain_emoji} Gain/Loss",
+                    f"£{gain_loss:,.0f}",
+                    delta=f"{gain_loss_pct:+.1f}%" if cost_basis > 0 else "N/A",
+                )
+
+            # Breakdown table
+            if holdings_breakdown:
+                st.markdown("**Breakdown by Tax Wrapper & Platform:**")
+                breakdown_data = []
+                for h in holdings_breakdown:
+                    wrapper_emoji = WRAPPER_EMOJI.get(h["tax_wrapper"], "")
+                    h_cost = h.get("cost", 0)
+                    h_gain = h.get("gain_loss", 0)
+                    h_gain_pct = h.get("gain_loss_pct", 0)
+                    # Format gain/loss with sign before £
+                    gain_sign = "+" if h_gain >= 0 else "-"
+                    pct_sign = "+" if h_gain_pct >= 0 else "-"
+                    breakdown_data.append(
+                        {
+                            "Tax Wrapper": f"{wrapper_emoji} {h['tax_wrapper']}",
+                            "Platform": h["platform"],
+                            "Units": f"{h['units']:,.2f}",
+                            "Cost": f"£{h_cost:,.0f}",
+                            "Value": f"£{h['value']:,.0f}",
+                            "Gain/Loss": f"{gain_sign}£{abs(h_gain):,.0f} ({pct_sign}{abs(h_gain_pct):.1f}%)",
+                            "% of Position": f"{(h['value'] / total_value * 100):.1f}%",
+                        }
+                    )
+
+                breakdown_df = pd.DataFrame(breakdown_data)
+                st.dataframe(
+                    breakdown_df,
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+            # Price history chart
+            st.markdown("**Price History:**")
+            price_df = get_price_history(ticker)
+            if not price_df.empty:
+                # Create a compact price chart
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=price_df["Date"],
+                        y=price_df["Price"],
+                        fill="tozeroy",
+                        name="Price",
+                        line=dict(color="#22c55e" if gain_loss >= 0 else "#ef4444", width=2),
+                        hovertemplate="<b>%{x|%Y-%m-%d}</b><br>Price: £%{y:.2f}<extra></extra>",
+                    )
+                )
+                fig.update_layout(
+                    height=250,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    xaxis=dict(showgrid=False, showticklabels=True),
+                    yaxis=dict(showgrid=True, gridcolor="#e5e5e5", tickprefix="£"),
+                    template="plotly_white",
+                    showlegend=False,
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No price history available for this ticker.")
+
+
 def render_current_holdings_tab():
     """Render the Current Holdings tab."""
-    st.header("💼 Current Holdings (VIP Funds)")
-    st.markdown("Your priority fund holdings with current values")
+    st.header("💼 Current Holdings")
+
+    # View selector
+    view_mode = st.radio(
+        "Select View",
+        ["📊 At a Glance", "📋 Detailed View"],
+        horizontal=True,
+        key="holdings_view_mode",
+    )
+
+    st.divider()
+
+    if view_mode == "📊 At a Glance":
+        render_at_a_glance_section()
+        return
+
+    # ---- Detailed View (existing code) ----
+    st.subheader("📋 Detailed Holdings by Wrapper & Platform")
 
     # Get VIP holdings
     holdings_df = get_current_holdings_vip()
